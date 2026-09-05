@@ -3,8 +3,8 @@
   "short_name": "Family Fund",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#F1F4EF",
-  "theme_color": "#1D6B48",
+  "background_color": "#EDF1EA",
+  "theme_color": "#12503A",
   "lang": "sw",
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
