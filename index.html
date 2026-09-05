@@ -8,6 +8,8 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://bbvizypslemcczsrfkhs.supabase.co" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
@@ -192,7 +194,15 @@ details summary::after{content:"";width:8px;height:8px;border-right:2px solid va
 details[open] summary::after{transform:rotate(-135deg);margin-top:2px}
 details .body{padding:0 16px 16px}
 .flash{background:var(--g100);transition:background .6s}
-@media (prefers-reduced-motion:reduce){*{transition:none !important}}
+.sk{display:flex;align-items:center;gap:12px;padding:15px 16px;border-top:1px solid var(--line)}
+.sk:first-child{border-top:0}
+.sk i{display:block;background:var(--line);border-radius:999px;animation:pulse 1.4s ease-in-out infinite}
+.sk .c{width:40px;height:40px;flex:none}
+.sk .l{flex:1;display:flex;flex-direction:column;gap:8px}
+.sk .l i{height:11px} .sk .l i:first-child{width:55%} .sk .l i:last-child{width:35%}
+.sk-hero{height:236px;border-radius:var(--r-lg);background:var(--line);margin-bottom:12px;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+@media (prefers-reduced-motion:reduce){*{transition:none !important;animation:none !important}}
 </style>
 </head>
 <body>
@@ -375,19 +385,80 @@ async function shareLink(path, title){
 }
 const shareBtn=(path,title)=>`<button class="btn ghost sm" data-share="${esc(path)}" data-title="${esc(title)}">${ic("share")}${esc(t("share"))}</button>`;
 const shareRow=(path,title,code)=>`${shareBtn(path,title)}${code?`<span class="tiny muted" style="align-self:center">${esc(t("sharecode"))} ${esc(code)}</span>`:""}`;
-async function loadMembers(){ const {data,error}=await sb.from("members").select("*").order("full_name"); if(error) throw error; S.cache.members=data; return data; }
+let membersP=null;
+function loadMembers(fresh=false){
+  if(S.cache.members&&!fresh) return Promise.resolve(S.cache.members);
+  if(!membersP) membersP=sb.from("members").select("*").order("full_name").then(({data,error})=>{ membersP=null; if(error) throw error; S.cache.members=data; return data; });
+  return membersP;
+}
+
+// ---------------------------------------------------------------- cache-first rendering
+// Every view is chrome + a data body. paint() writes the chrome at once, fills the body from cache if we have it
+// (else a skeleton), then revalidates in the background and repaints only if the data actually changed.
+const CACHE={}, INFLIGHT={}, HOLD=new Set();
+const withMembers=q=>Promise.all([loadMembers(),q]).then(([,r])=>r);
+const skeleton=(n=4,hero=false)=>(hero?`<div class="sk-hero"></div>`:"")+`<div class="sheet">${Array.from({length:n},()=>`<div class="sk"><i class="c"></i><span class="l"><i></i><i></i></span></div>`).join("")}</div>`;
+function fetchKey(key,load){
+  if(INFLIGHT[key]) return INFLIGHT[key];
+  const p=Promise.resolve().then(load).then(data=>{ const j=JSON.stringify(data); const changed=!CACHE[key]||CACHE[key].j!==j; CACHE[key]={data,j}; return {data,changed}; }).finally(()=>{ delete INFLIGHT[key]; });
+  INFLIGHT[key]=p; return p;
+}
+function afterWrite(el){
+  el.querySelectorAll("[data-share]").forEach(b=>b.onclick=()=>shareLink(b.dataset.share,b.dataset.title));
+  if(S.scrollTo){ const a=el.querySelector(`[data-anchor="${S.scrollTo}"]`); if(a){ S.scrollTo=null; a.scrollIntoView({block:"center"}); a.classList.add("flash"); setTimeout(()=>a.classList.remove("flash"),2000); } }
+}
+async function paint(el,{key,chrome="",onTab,load,body,bind,hero=false}){
+  const hit=load? CACHE[key] : null;
+  el.innerHTML=chrome+`<div class="vb">${!load? body() : hit? body(hit.data) : skeleton(4,hero)}</div>`;
+  if(onTab) el.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{onTab(b.dataset.s); render();});
+  if(!load||hit){ bind?.(); afterWrite(el); }
+  if(!load||(hit&&HOLD.has(key))) return;
+  const {data,changed}=await fetchKey(key,load);
+  const vb=el.querySelector(".vb"); if(!vb) return;
+  if(!hit||changed){ vb.innerHTML=body(data); bind?.(); afterWrite(el); }
+}
+// Apply a change to the cached rows and repaint at once; the server confirms it afterwards, or we roll back.
+async function optimistic(key,mutate,action,okMsg){
+  const prev=CACHE[key];
+  if(prev){ const d=JSON.parse(prev.j); mutate(d); CACHE[key]={data:d,j:JSON.stringify(d)}; }
+  HOLD.add(key); render();
+  try{ await action(); if(okMsg) toast(okMsg); }
+  catch(e){ if(prev) CACHE[key]=prev; else delete CACHE[key]; fail(e); }
+  finally{ HOLD.delete(key); render(); }
+}
+function invalidateAll(){ for(const k in CACHE) delete CACHE[k]; }
+const resp=r=>({data:r.data??null,count:r.count??0});
+const LOADERS={
+  home:()=>{ const period=monthStart(); return Promise.all([
+    sb.from("fund_summary").select("*").single(),
+    sb.from("member_month_status").select("*").eq("member_id",S.me.id).eq("period",period).maybeSingle(),
+    sb.from("member_balances").select("*").eq("member_id",S.me.id).single(),
+    has("treasurer")? sb.from("contributions").select("id",{count:"exact",head:true}).eq("status","submitted") : Promise.resolve({data:null,count:0}),
+    (has("treasurer")||has("chairperson"))? sb.from("loans").select("id",{count:"exact",head:true}).eq("status","requested") : Promise.resolve({count:0}),
+    sb.from("proposals").select("id",{count:"exact",head:true}).eq("status","open"),
+    sb.from("contributions").select("status").eq("member_id",S.me.id).eq("period",period).eq("kind","monthly").eq("status","submitted"),
+    sb.from("penalties").select("amount").eq("member_id",S.me.id).eq("status","pending")
+  ].map(p=>Promise.resolve(p).then(resp, ()=>({data:null,count:0})))); },
+  "money:month":()=>withMembers(sb.from("member_month_status").select("*").eq("period",monthStart())),
+  "money:review":()=>withMembers(sb.from("contributions").select("*").eq("status","submitted").order("created_at")),
+  "vote:open":()=>withMembers(sb.from("proposals").select("*, votes(*)").order("created_at",{ascending:false}).eq("status","open")),
+  "more:members":()=>Promise.all([loadMembers(), sb.from("role_assignments").select("*").lte("term_start",today()).gte("term_end",today()), sb.from("member_balances").select("*")]).then(([,r,b])=>({roles:r.data,bals:b.data}))
+};
+// One parallel round-trip after sign-in for everything the tabs need, so switching between them costs nothing.
+function prefetch(){
+  const keys=["home","more:members","vote:open","money:month"]; if(has("treasurer")) keys.push("money:review");
+  return Promise.all([loadMembers(), ...keys.map(k=>fetchKey(k,LOADERS[k]))].map(p=>p.catch(()=>{})));
+}
 
 // ---------------------------------------------------------------- render root
 async function render(){
   const app=$("#app");
   if(!S.session){ app.innerHTML=authView(); bindAuth(); return; }
   if(!S.me){ app.innerHTML=`<div class="center"><h1>${esc(t("welcome"))}</h1><p class="muted" style="margin-top:8px">Your account is not linked to a member. Ask an officer to add your username.</p><button class="btn quiet" style="margin-top:16px" id="so">${esc(t("signout"))}</button></div>`; $("#so").onclick=signOut; return; }
-  app.innerHTML=`<div class="topbar"><div class="mark">${ic("logo","")}</div><div class="brand">Bwana Family Fund<span>${esc(S.me.full_name)}</span></div><button class="lang" id="lang">${ic("globe","")}${lang==="sw"?"English":"Kiswahili"}</button></div><div id="view"><div class="spinner">${esc(t("loading"))}</div></div>`+navView();
+  app.innerHTML=`<div class="topbar"><div class="mark">${ic("logo","")}</div><div class="brand">Bwana Family Fund<span>${esc(S.me.full_name)}</span></div><button class="lang" id="lang">${ic("globe","")}${lang==="sw"?"English":"Kiswahili"}</button></div><div id="view"></div>`+navView();
   $("#lang").onclick=async()=>{ lang=lang==="sw"?"en":"sw"; localStorage.setItem("lang",lang); if(S.me) await sb.from("members").update({language:lang}).eq("id",S.me.id); render(); };
   document.querySelectorAll(".nav button").forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab; render();});
   try{ await ({home:homeView,money:moneyView,loans:loansView,vote:voteView,more:moreView}[S.tab])($("#view")); } catch(e){ fail(e); }
-  document.querySelectorAll("[data-share]").forEach(b=>b.onclick=()=>shareLink(b.dataset.share,b.dataset.title));
-  if(S.scrollTo){ const el=document.querySelector(`[data-anchor="${S.scrollTo}"]`); S.scrollTo=null; if(el){ el.scrollIntoView({block:"center"}); el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),2000); } }
 }
 function navView(){
   return `<nav class="nav"><div class="in">${["home","money","loans","vote","more"].map(k=>`<button data-tab="${k}" class="${S.tab===k?"on":""}">${ic(k,"")}${esc(t(k))}</button>`).join("")}</div></nav>`;
@@ -427,7 +498,7 @@ function bindAuth(){
         const {error}=await sb.auth.signInWithPassword({email,password:f.pin});
         if(error) throw new Error(/invalid/i.test(error.message)? t("wrongpin") : error.message);
       }
-      await loadContext(); await applyRoute(); render();
+      await loadContext(); if(S.me) prefetch(); await applyRoute(); render();
     });
   };
 }
@@ -436,16 +507,8 @@ async function signOut(){ await sb.auth.signOut(); S.session=null; S.me=null; S.
 // ---------------------------------------------------------------- home
 async function homeView(el){
   const st=S.settings; const period=monthStart();
-  const [{data:fs},{data:mm},{data:bal},{data:pendingC},{data:loanReqs},{data:openP},{data:mine},{data:fines}]=await Promise.all([
-    sb.from("fund_summary").select("*").single(),
-    sb.from("member_month_status").select("*").eq("member_id",S.me.id).eq("period",period).maybeSingle(),
-    sb.from("member_balances").select("*").eq("member_id",S.me.id).single(),
-    has("treasurer")? sb.from("contributions").select("id",{count:"exact",head:true}).eq("status","submitted") : Promise.resolve({data:null,count:0}),
-    (has("treasurer")||has("chairperson"))? sb.from("loans").select("id",{count:"exact",head:true}).eq("status","requested") : Promise.resolve({count:0}),
-    sb.from("proposals").select("id",{count:"exact",head:true}).eq("status","open"),
-    sb.from("contributions").select("status").eq("member_id",S.me.id).eq("period",period).eq("kind","monthly").eq("status","submitted"),
-    sb.from("penalties").select("amount").eq("member_id",S.me.id).eq("status","pending")
-  ].map(p=>p.then(r=>r, e=>({data:null,count:0,error:e}))));
+  await paint(el,{key:"home",hero:true,load:LOADERS.home,body:([fsR,mmR,balR,pcR,lrR,opR,mineR,finesR])=>{
+  const fs=fsR.data, mm=mmR.data, bal=balR.data, pendingC=pcR, loanReqs=lrR, openP=opR, mine=mineR.data, fines=finesR.data;
   const paidState = mm?.status==="paid" ? "ok" : (mine?.length? "wait" : (mm?.status==="partial"?"wait":"bad"));
   const stateText = mm?.status==="paid" ? t("paid") : (mine?.length? t("pending") : (mm?.status==="partial"? t("partial") : t("notyet")));
   const isLate = mm && mm.status!=="paid" && !mine?.length && new Date(mm.due_on) < new Date(today());
@@ -459,7 +522,7 @@ async function homeView(el){
   const finesDue=(fines||[]).reduce((a,x)=>a+Number(x.amount||0),0);
   if(finesDue>0) tasks.push({label:`${money(finesDue)} ${t("infines")}`, hint:t("tapview"), icon:"bell", tab:"more"});
   const cur=(S.settings.currency||"TZS");
-  el.innerHTML=`
+  return `
   <section class="hero">
     <p class="eyebrow">${esc(t("thismonth"))} · ${esc(fmtMonth(period))}</p>
     <div class="big num"><small>${esc(cur)}</small>${heroAmount.toLocaleString("en-US")}</div>
@@ -493,9 +556,10 @@ async function homeView(el){
     ${tasks.length
       ? tasks.map(x=>`<button class="act" data-go="${esc(x.tab)}"><span class="ico">${ic(x.icon)}</span><span class="l"><b>${esc(x.label)}</b><span>${esc(x.hint)}</span></span>${ic("chev","chev")}</button>`).join("")
       : `<div class="empty" style="padding:8px 16px 20px">${esc(t("allgood"))}</div>`}
-  </div>`;
+  </div>`; }, bind:()=>{
   const gp=$("#goPay"); if(gp) gp.onclick=()=>{S.tab="money"; S.sub.money="submit"; render();};
   el.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{S.tab=b.dataset.go; S.sub[b.dataset.go]= b.dataset.go==="money"?"review": b.dataset.go==="loans"?"decide": b.dataset.go==="more"?"account":"open"; render();});
+  }});
 }
 
 // ---------------------------------------------------------------- deposits
@@ -537,51 +601,49 @@ function bindDepositForm(id, officer){
     }); };
 }
 async function moneyView(el){
-  await loadMembers();
   const sub=S.sub.money||"mine"; const tabs=[["mine",t("myhistory")],["all",t("alldeposits")],["submit",t("submitdeposit")],["month",t("whopaid")]];
   if(has("treasurer")) tabs.push(["review",t("awaiting")],["record",t("recorddeposit")]);
-  let body="";
+  let load=null, body=null;
   if(sub==="mine"){
-    const {data}=await sb.from("contributions").select("*").eq("member_id",S.me.id).order("paid_on",{ascending:false}).limit(60);
-    body = data?.length? `<div class="sheet">${data.map(c=>`<div class="row"><div class="prow"><span class="av">${ic(c.status==="confirmed"?"check":c.status==="rejected"?"money":"clock")}</span><span class="l"><span class="name">${esc(t(c.kind))}${c.period?` · ${esc(fmtMonth(c.period))}`:""}</span><span class="sub wrap">${esc(fmtDate(c.paid_on))}${c.reference?` · ${esc(c.reference)}`:""}${c.rejection_reason?` · ${esc(c.rejection_reason)}`:""}</span></span><span class="r"><span class="amt num">${money(c.amount)}</span>${pillFor(c.status)}</span></div></div>`).join("")}</div>` : `<div class="sheet"><div class="empty">${esc(t("nothing"))}</div></div>`;
-  } else if(sub==="submit"){ body=`<div class="sheet"><div class="row">${depositForm({officer:false})}</div></div>`; }
-  else if(sub==="record"){ body=`<div class="sheet"><div class="row">${depositForm({officer:true})}</div></div>`; }
+    load=()=>sb.from("contributions").select("*").eq("member_id",S.me.id).order("paid_on",{ascending:false}).limit(60);
+    body=({data})=>data?.length? `<div class="sheet">${data.map(c=>`<div class="row"><div class="prow"><span class="av">${ic(c.status==="confirmed"?"check":c.status==="rejected"?"money":"clock")}</span><span class="l"><span class="name">${esc(t(c.kind))}${c.period?` · ${esc(fmtMonth(c.period))}`:""}</span><span class="sub wrap">${esc(fmtDate(c.paid_on))}${c.reference?` · ${esc(c.reference)}`:""}${c.rejection_reason?` · ${esc(c.rejection_reason)}`:""}</span></span><span class="r"><span class="amt num">${money(c.amount)}</span>${pillFor(c.status)}</span></div></div>`).join("")}</div>` : `<div class="sheet"><div class="empty">${esc(t("nothing"))}</div></div>`;
+  } else if(sub==="submit"){ body=()=>`<div class="sheet"><div class="row">${depositForm({officer:false})}</div></div>`; }
+  else if(sub==="record"){ load=()=>loadMembers(); body=()=>`<div class="sheet"><div class="row">${depositForm({officer:true})}</div></div>`; }
   else if(sub==="month"){
-    const {data}=await sb.from("member_month_status").select("*").eq("period",monthStart());
-    body=`<div class="sheet"><div class="row head"><h3>${esc(fmtMonth(monthStart()))}</h3><span class="small muted num">${(data||[]).filter(x=>x.status==="paid").length} ${esc(t("of"))} ${(data||[]).length}</span></div><div class="month-grid">${(data||[]).map(x=>`<div class="${x.status}"><b>${esc(memberName(x.member_id))}</b><span class="tiny">${esc(t(x.status==="missing"?"notyet":x.status))}</span>${Number(x.fines_due||0)>0?`<span class="tiny" style="display:block">+ ${esc(money(x.fines_due))}</span>`:""}</div>`).join("")}</div></div>`;
+    load=LOADERS["money:month"];
+    body=({data})=>`<div class="sheet"><div class="row head"><h3>${esc(fmtMonth(monthStart()))}</h3><span class="small muted num">${(data||[]).filter(x=>x.status==="paid").length} ${esc(t("of"))} ${(data||[]).length}</span></div><div class="month-grid">${(data||[]).map(x=>`<div class="${x.status}"><b>${esc(memberName(x.member_id))}</b><span class="tiny">${esc(t(x.status==="missing"?"notyet":x.status))}</span>${Number(x.fines_due||0)>0?`<span class="tiny" style="display:block">+ ${esc(money(x.fines_due))}</span>`:""}</div>`).join("")}</div></div>`;
   } else if(sub==="all"){
-    await loadMembers();
-    const {data}=await sb.from("contributions").select("*").eq("status","confirmed").order("paid_on",{ascending:false}).limit(100);
-    const ds=data||[]; const dtot=ds.reduce((a,x)=>a+Number(x.amount||0),0);
-    body=`<div class="sheet"><div class="sect">${ic("money")}<h3>${esc(t("alldeposits"))}</h3></div>${ds.length?`<div class="row between small"><span>${esc(t("depositstotal"))}</span><span class="amt num">${ds.length} · ${money(dtot)}</span></div>`:""}
-    ${ds.length? ds.map(c=>`<div class="row"><div class="prow top"><span class="av">${esc(initials(memberName(c.member_id)))}</span><span class="l"><span class="name">${esc(memberName(c.member_id))}</span><span class="sub wrap">${esc(t(c.kind))}${c.period?` · ${esc(fmtMonth(c.period))}`:""} · ${esc(fmtDate(c.paid_on))}${c.channel?` · ${esc(c.channel)}`:""}${c.reference?` · ${esc(c.reference)}`:""}</span></span><span class="amt num">${money(c.amount)}</span></div></div>`).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>`;
+    load=()=>withMembers(sb.from("contributions").select("*").eq("status","confirmed").order("paid_on",{ascending:false}).limit(100));
+    body=({data})=>{ const ds=data||[]; const dtot=ds.reduce((a,x)=>a+Number(x.amount||0),0);
+    return `<div class="sheet"><div class="sect">${ic("money")}<h3>${esc(t("alldeposits"))}</h3></div>${ds.length?`<div class="row between small"><span>${esc(t("depositstotal"))}</span><span class="amt num">${ds.length} · ${money(dtot)}</span></div>`:""}
+    ${ds.length? ds.map(c=>`<div class="row"><div class="prow top"><span class="av">${esc(initials(memberName(c.member_id)))}</span><span class="l"><span class="name">${esc(memberName(c.member_id))}</span><span class="sub wrap">${esc(t(c.kind))}${c.period?` · ${esc(fmtMonth(c.period))}`:""} · ${esc(fmtDate(c.paid_on))}${c.channel?` · ${esc(c.channel)}`:""}${c.reference?` · ${esc(c.reference)}`:""}</span></span><span class="amt num">${money(c.amount)}</span></div></div>`).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>`; };
   } else if(sub==="review"){
-    const {data}=await sb.from("contributions").select("*").eq("status","submitted").order("created_at");
-    body = data?.length? `<div class="sheet">${data.map(c=>`<div class="row" style="flex-direction:column"><div class="prow top"><span class="av">${esc(initials(memberName(c.member_id)))}</span><span class="l"><span class="name">${esc(memberName(c.member_id))}</span><span class="sub wrap">${esc(t(c.kind))}${c.period?` · ${esc(fmtMonth(c.period))}`:""} · ${esc(fmtDate(c.paid_on))} · ${esc(c.channel||"")} ${esc(c.reference||"")}</span></span><span class="amt num">${money(c.amount)}</span></div>
+    load=LOADERS["money:review"];
+    body=({data})=>data?.length? `<div class="sheet">${data.map(c=>`<div class="row" style="flex-direction:column"><div class="prow top"><span class="av">${esc(initials(memberName(c.member_id)))}</span><span class="l"><span class="name">${esc(memberName(c.member_id))}</span><span class="sub wrap">${esc(t(c.kind))}${c.period?` · ${esc(fmtMonth(c.period))}`:""} · ${esc(fmtDate(c.paid_on))} · ${esc(c.channel||"")} ${esc(c.reference||"")}</span></span><span class="amt num">${money(c.amount)}</span></div>
       <div class="btnrow" style="margin-top:10px">${c.proof_url?`<button class="btn quiet sm" data-proof="${esc(c.proof_url)}">${esc(t("proof")).replace(/\s*\(.*\)/,"")}</button>`:""}<button class="btn sm" data-ok="${c.id}">${esc(t("confirm"))}</button><button class="btn quiet sm" data-no="${c.id}">${esc(t("reject"))}</button></div></div>`).join("")}</div>` : `<div class="sheet"><div class="empty">${esc(t("nothing"))}</div></div>`;
   }
-  el.innerHTML=`<div class="tabs">${tabs.map(([k,l])=>`<button data-s="${k}" class="${sub===k?"on":""}">${esc(l)}</button>`).join("")}</div>${body}`;
-  el.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{S.sub.money=b.dataset.s; render();});
+  await paint(el,{key:"money:"+sub, chrome:`<div class="tabs">${tabs.map(([k,l])=>`<button data-s="${k}" class="${sub===k?"on":""}">${esc(l)}</button>`).join("")}</div>`, onTab:s=>{S.sub.money=s;}, load, body, bind:()=>{
   bindDepositForm("subf",false); bindDepositForm("recf",true);
-  el.querySelectorAll("[data-ok]").forEach(b=>b.onclick=()=>busy(b,async()=>{const {error}=await sb.rpc("review_contribution",{p_id:b.dataset.ok,p_approve:true}); if(error) throw error; toast(t("confirmed")); render();}));
-  el.querySelectorAll("[data-no]").forEach(b=>b.onclick=()=>{const r=prompt(t("rejectreason")); if(r===null) return; busy(b,async()=>{const {error}=await sb.rpc("review_contribution",{p_id:b.dataset.no,p_approve:false,p_reason:r}); if(error) throw error; toast(t("rejected")); render();});});
+  el.querySelectorAll("[data-ok]").forEach(b=>b.onclick=()=>optimistic("money:review", d=>{ d.data=(d.data||[]).filter(c=>c.id!==b.dataset.ok); }, async()=>{ const {error}=await sb.rpc("review_contribution",{p_id:b.dataset.ok,p_approve:true}); if(error) throw error; }, t("confirmed")));
+  el.querySelectorAll("[data-no]").forEach(b=>b.onclick=()=>{const r=prompt(t("rejectreason")); if(r===null) return; optimistic("money:review", d=>{ d.data=(d.data||[]).filter(c=>c.id!==b.dataset.no); }, async()=>{ const {error}=await sb.rpc("review_contribution",{p_id:b.dataset.no,p_approve:false,p_reason:r}); if(error) throw error; }, t("rejected"));});
   el.querySelectorAll("[data-proof]").forEach(b=>b.onclick=()=>busy(b,async()=>{const {data,error}=await sb.storage.from("proofs").createSignedUrl(b.dataset.proof,300); if(error) throw error; window.open(data.signedUrl,"_blank");}));
+  }});
 }
 
 // ---------------------------------------------------------------- loans
 async function loansView(el){
-  await loadMembers(); const st=S.settings;
+  const st=S.settings;
   const sub=S.sub.loans||"mine"; const tabs=[["mine",t("myloans")],["all",t("allloans")]];
   if(has("treasurer")||has("chairperson")) tabs.push(["decide",t("decide")]);
   if(has("treasurer")) tabs.push(["repayments",t("repayments")]);
-  let body="";
+  let load=null, body=null;
   const loanCard=(l, actions="")=>{ const paid=(l.loan_repayments||[]).filter(r=>r.status==="confirmed").reduce((a,r)=>a+Number(r.amount),0);
     return `<div class="row" style="flex-direction:column"><div class="prow top"><span class="av">${esc(initials(memberName(l.member_id)))}</span><span class="l"><span class="name">${esc(memberName(l.member_id))}</span><span class="sub">${esc(l.purpose||"")}${l.due_on?` · ${esc(t("due"))} ${esc(fmtDate(l.due_on))}`:""}</span><span class="sub wrap num">${money(l.principal)} + ${money(l.interest_amount)} ${esc(t("interest"))} = ${money(l.total_due)}${l.status==="disbursed"?` · ${esc(t("outstanding"))} ${money(Number(l.total_due)-paid)}`:""}</span></span><span class="r">${pillFor(l.status)}</span></div>${actions}</div>`; };
   if(sub==="mine"){
-    const [{data:elig},{data:loans}]=await Promise.all([sb.rpc("loan_eligibility"), sb.from("loans").select("*, loan_repayments(*)").eq("member_id",S.me.id).order("created_at",{ascending:false})]);
-    const e=Array.isArray(elig)?elig[0]:elig;
+    load=()=>Promise.all([loadMembers(), sb.rpc("loan_eligibility"), sb.from("loans").select("*, loan_repayments(*)").eq("member_id",S.me.id).order("created_at",{ascending:false})]).then(([,a,b])=>({elig:a.data,loans:b.data}));
+    body=({elig,loans})=>{ const e=Array.isArray(elig)?elig[0]:elig;
     const activeLoan=(loans||[]).find(l=>l.status==="disbursed");
-    body=`<div class="sheet"><div class="row"><h3>${esc(t("eligibility"))}</h3>
+    return `<div class="sheet"><div class="row"><h3>${esc(t("eligibility"))}</h3>
       <p class="status ${e?.eligible?"ok":"bad"}" style="margin-top:6px">${esc(e?.eligible?t("eligible"):t("noteligible"))}</p>
       ${e?.eligible?`<p class="small muted num">${esc(t("maxloan"))}: ${money(e.max_loan)}</p>`:`<ul class="small muted" style="margin:6px 0 0 18px;padding:0">${(e?.reasons||[]).map(r=>`<li>${esc(r)}</li>`).join("")}</ul>`}
       ${e?.eligible?`<details style="margin-top:8px"><summary style="padding:8px 0">${esc(t("requestloan"))}</summary><div class="body" style="padding:0"><form id="loanf">
@@ -596,19 +658,18 @@ async function loansView(el){
       <label class="f"><span>${esc(t("paidon"))}</span><input name="paid_on" type="date" value="${today()}" required></label>
       <label class="f"><span>${esc(t("reference"))}</span><input name="reference"></label>
       <button class="btn full" style="margin-top:14px" type="submit">${esc(t("submit"))}</button></form></div></div>`:""}
-    <div class="sheet list">${loans?.length? loans.map(l=>loanCard(l)).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>`;
+    <div class="sheet list">${loans?.length? loans.map(l=>loanCard(l)).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>`; };
   } else if(sub==="all"){
-    const {data}=await sb.from("loans").select("*, loan_repayments(*)").order("created_at",{ascending:false}).limit(100);
-    body=`<div class="sheet">${data?.length? data.map(l=>loanCard(l)).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>`;
+    load=()=>withMembers(sb.from("loans").select("*, loan_repayments(*)").order("created_at",{ascending:false}).limit(100));
+    body=({data})=>`<div class="sheet">${data?.length? data.map(l=>loanCard(l)).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>`;
   } else if(sub==="decide"){
-    const {data}=await sb.from("loans").select("*, loan_repayments(*)").in("status",["requested","approved"]).order("created_at");
-    body=`<div class="sheet">${data?.length? data.map(l=>loanCard(l, `<div class="btnrow" style="margin-top:10px">${l.status==="requested"?`<button class="btn sm" data-approve="${l.id}">${esc(t("approve"))}</button><button class="btn quiet sm" data-rejectl="${l.id}">${esc(t("reject"))}</button>`:""}${l.status==="approved"&&has("treasurer")?`<button class="btn sm" data-disburse="${l.id}">${esc(t("disburse"))}</button>`:""}</div>`)).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>`;
+    load=()=>withMembers(sb.from("loans").select("*, loan_repayments(*)").in("status",["requested","approved"]).order("created_at"));
+    body=({data})=>`<div class="sheet">${data?.length? data.map(l=>loanCard(l, `<div class="btnrow" style="margin-top:10px">${l.status==="requested"?`<button class="btn sm" data-approve="${l.id}">${esc(t("approve"))}</button><button class="btn quiet sm" data-rejectl="${l.id}">${esc(t("reject"))}</button>`:""}${l.status==="approved"&&has("treasurer")?`<button class="btn sm" data-disburse="${l.id}">${esc(t("disburse"))}</button>`:""}</div>`)).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>`;
   } else if(sub==="repayments"){
-    const {data}=await sb.from("loan_repayments").select("*, loans(member_id, total_due)").eq("status","submitted").order("created_at");
-    body=`<div class="sheet">${data?.length? data.map(r=>`<div class="row"><div class="prow"><span class="av">${esc(initials(memberName(r.loans?.member_id)))}</span><span class="l"><span class="name">${esc(memberName(r.loans?.member_id))}</span><span class="sub">${esc(fmtDate(r.paid_on))} ${esc(r.reference||"")}</span></span><div class="r"><p class="amt num">${money(r.amount)}</p><div class="btnrow" style="justify-content:flex-end;margin-top:6px"><button class="btn sm" data-rok="${r.id}">${esc(t("confirm"))}</button><button class="btn quiet sm" data-rno="${r.id}">${esc(t("reject"))}</button></div></div></div></div>`).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>`;
+    load=()=>withMembers(sb.from("loan_repayments").select("*, loans(member_id, total_due)").eq("status","submitted").order("created_at"));
+    body=({data})=>`<div class="sheet">${data?.length? data.map(r=>`<div class="row"><div class="prow"><span class="av">${esc(initials(memberName(r.loans?.member_id)))}</span><span class="l"><span class="name">${esc(memberName(r.loans?.member_id))}</span><span class="sub">${esc(fmtDate(r.paid_on))} ${esc(r.reference||"")}</span></span><div class="r"><p class="amt num">${money(r.amount)}</p><div class="btnrow" style="justify-content:flex-end;margin-top:6px"><button class="btn sm" data-rok="${r.id}">${esc(t("confirm"))}</button><button class="btn quiet sm" data-rno="${r.id}">${esc(t("reject"))}</button></div></div></div></div>`).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>`;
   }
-  el.innerHTML=`<div class="tabs">${tabs.map(([k,l])=>`<button data-s="${k}" class="${sub===k?"on":""}">${esc(l)}</button>`).join("")}</div>${body}`;
-  el.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{S.sub.loans=b.dataset.s; render();});
+  await paint(el,{key:"loans:"+sub, chrome:`<div class="tabs">${tabs.map(([k,l])=>`<button data-s="${k}" class="${sub===k?"on":""}">${esc(l)}</button>`).join("")}</div>`, onTab:s=>{S.sub.loans=s;}, load, body, bind:()=>{
   const lf=$("#loanf"); if(lf){ const upd=()=>{ const p=Number(lf.principal.value||0), m=Number(lf.term.value); const i = st.loan_interest_method==="flat_per_month"? p*st.loan_interest_rate_pct/100*m : p*st.loan_interest_rate_pct/100; $("#repayHint").textContent=`${t("youllrepay")} ${money(p+i)} (${money(i)} ${t("interest")})`; }; lf.oninput=upd; upd();
     lf.onsubmit=e=>{e.preventDefault(); busy(lf.querySelector("button"),async()=>{const {error}=await sb.rpc("request_loan",{p_principal:Number(lf.principal.value),p_term_months:Number(lf.term.value),p_purpose:lf.purpose.value||null}); if(error) throw error; toast(t("requested")); render();});}; }
   const rf=$("#repf"); if(rf){ rf.onsubmit=async e=>{e.preventDefault(); busy(rf.querySelector("button"),async()=>{ const {data:l}=await sb.from("loans").select("id").eq("member_id",S.me.id).eq("status","disbursed").single(); const {error}=await sb.from("loan_repayments").insert({loan_id:l.id,amount:Number(rf.amount.value),paid_on:rf.paid_on.value,reference:rf.reference.value||null,submitted_by:S.me.id,status:"submitted"}); if(error) throw error; toast(t("submitted")); render();});}; }
@@ -616,8 +677,9 @@ async function loansView(el){
   el.querySelectorAll("[data-approve]").forEach(b=>b.onclick=()=>rpc("decide_loan",b=>({p_loan:b.dataset.approve,p_approve:true}),t("approved"))(b));
   el.querySelectorAll("[data-rejectl]").forEach(b=>b.onclick=()=>{const r=prompt(t("rejectreason")); if(r===null) return; rpc("decide_loan",b=>({p_loan:b.dataset.rejectl,p_approve:false,p_note:r}),t("rejected"))(b);});
   el.querySelectorAll("[data-disburse]").forEach(b=>b.onclick=()=>rpc("disburse_loan",b=>({p_loan:b.dataset.disburse}),t("done"))(b));
-  el.querySelectorAll("[data-rok]").forEach(b=>b.onclick=()=>rpc("review_repayment",b=>({p_id:b.dataset.rok,p_approve:true}),t("confirmed"))(b));
-  el.querySelectorAll("[data-rno]").forEach(b=>b.onclick=()=>{const r=prompt(t("rejectreason")); if(r===null) return; rpc("review_repayment",b=>({p_id:b.dataset.rno,p_approve:false,p_reason:r}),t("rejected"))(b);});
+  el.querySelectorAll("[data-rok]").forEach(b=>b.onclick=()=>optimistic("loans:repayments", d=>{ d.data=(d.data||[]).filter(r=>r.id!==b.dataset.rok); }, async()=>{ const {error}=await sb.rpc("review_repayment",{p_id:b.dataset.rok,p_approve:true}); if(error) throw error; }, t("confirmed")));
+  el.querySelectorAll("[data-rno]").forEach(b=>b.onclick=()=>{const r=prompt(t("rejectreason")); if(r===null) return; optimistic("loans:repayments", d=>{ d.data=(d.data||[]).filter(x=>x.id!==b.dataset.rno); }, async()=>{ const {error}=await sb.rpc("review_repayment",{p_id:b.dataset.rno,p_approve:false,p_reason:r}); if(error) throw error; }, t("rejected"));});
+  }});
 }
 
 // ---------------------------------------------------------------- vote
@@ -625,19 +687,17 @@ const SETTING_FIELDS=["initial_deposit","monthly_contribution","deposit_day","gr
 const MONEY_FIELDS=["initial_deposit","monthly_contribution","late_fine","meeting_absence_fine","large_investment_threshold","invest_start_balance","target_amount"];
 function settingDisplay(k,v){ if(v==null||v==="") return "—"; if(k==="loan_interest_method") return t(v); if(k==="target_date") return fmtDate(v); if(MONEY_FIELDS.includes(k)) return money(v); return String(Number(v)); }
 async function voteView(el){
-  await loadMembers();
   const sub=S.sub.vote||"open"; const tabs=[["open",t("open")],["new",t("newproposal")],["past",t("past")]];
-  let body="";
+  let load=null, body=null;
   if(sub==="open"||sub==="past"){
-    const q=sb.from("proposals").select("*, votes(*)").order("created_at",{ascending:false});
-    const {data}= sub==="open"? await q.eq("status","open") : await q.neq("status","open").limit(50);
-    body = data?.length? data.map(p=>{ const yes=p.votes.filter(v=>v.choice==="yes").length, no=p.votes.filter(v=>v.choice==="no").length, needed=Math.ceil(p.eligible_voters*p.threshold_pct/100); const mine=p.votes.find(v=>v.member_id===S.me.id); const canClose=p.status==="open"&&(has("chairperson")||has("secretary")||new Date(p.closes_at)<=new Date());
+    load= sub==="open"? LOADERS["vote:open"] : ()=>withMembers(sb.from("proposals").select("*, votes(*)").order("created_at",{ascending:false}).neq("status","open").limit(50));
+    body=({data})=>data?.length? data.map(p=>{ const yes=p.votes.filter(v=>v.choice==="yes").length, no=p.votes.filter(v=>v.choice==="no").length, needed=Math.ceil(p.eligible_voters*p.threshold_pct/100); const mine=p.votes.find(v=>v.member_id===S.me.id); const canClose=p.status==="open"&&(has("chairperson")||has("secretary")||new Date(p.closes_at)<=new Date());
       const payloadRows = p.kind==="settings_change"&&p.payload? Object.entries(p.payload).map(([k,v])=>`<div class="row between small"><span>${esc(t("s_"+k))}</span><span class="num">${esc(settingDisplay(k,S.settings[k]))} → <b>${esc(settingDisplay(k,v))}</b></span></div>`).join("") : "";
       return `<div class="sheet" data-anchor="${p.id}"><div class="row"><div class="row head" style="padding:0"><h3>${esc(p.title)}</h3>${pillFor(p.status)}</div><p class="small muted">${esc(t(p.kind))}${p.amount?` · ${money(p.amount)}`:""} · ${esc(memberName(p.proposed_by))}</p>${p.description?`<p class="small" style="margin-top:6px">${esc(p.description)}</p>`:""}</div>${payloadRows}
       <div class="row"><p class="small num"><b>${yes}</b> ${esc(t("yes"))} · <b>${no}</b> ${esc(t("no"))} · ${needed} ${esc(t("needed"))} (${p.eligible_voters} ${esc(t("members")).toLowerCase()})</p>${p.status==="open"?`<p class="small muted">${esc(t("closes"))} ${esc(fmtDate(p.closes_at))}${mine?` · ${esc(t("voted"))}: ${esc(t(mine.choice))}`:""}</p>
         <div class="btnrow" style="margin-top:10px">${["yes","no","abstain"].map(c=>`<button class="btn sm ${mine?.choice===c?"":"quiet"}" data-vote="${p.id}" data-choice="${c}">${esc(t(c))}</button>`).join("")}${canClose?`<button class="btn ghost sm" data-close="${p.id}">${esc(t("close"))}</button>`:""}${shareRow("#/p/"+p.code, t("vote")+": "+p.title, p.code)}</div>`:`<div class="btnrow" style="margin-top:10px">${shareRow("#/p/"+p.code, t("vote")+": "+p.title, p.code)}</div>`}</div></div>`; }).join("") : `<div class="sheet"><div class="empty">${esc(t("nothing"))}</div></div>`;
   } else {
-    body=`<div class="sheet"><div class="row"><form id="propf">
+    body=()=>`<div class="sheet"><div class="row"><form id="propf">
       <label class="f"><span>${esc(t("proposalkind"))}</span><select name="kind" id="pkind">${["investment","expense","settings_change","member_change","other"].map(k=>`<option value="${k}">${esc(t(k))}</option>`).join("")}</select></label>
       <label class="f"><span>${esc(t("title"))}</span><input name="title" required></label>
       <label class="f"><span>${esc(t("description"))}</span><textarea name="description"></textarea></label>
@@ -645,14 +705,15 @@ async function voteView(el){
       <div id="setWrap" style="display:none"><p class="hint" style="margin-top:12px">${esc(t("nochange"))}</p>${SETTING_FIELDS.map(k=>`<label class="f"><span>${esc(t("s_"+k))} <span class="muted">(${esc(t("currentval"))}: ${esc(settingDisplay(k,S.settings[k]))})</span></span>${k==="loan_interest_method"?`<select name="s_${k}"><option value="">—</option><option value="flat_per_month">${esc(t("flat_per_month"))}</option><option value="flat_once">${esc(t("flat_once"))}</option></select>`:k==="target_date"?`<input name="s_${k}" type="date">`:`<input name="s_${k}" type="number" step="any" inputmode="decimal">`}</label>`).join("")}</div>
       <button class="btn full" style="margin-top:16px" type="submit">${esc(t("openvote"))}</button></form></div></div>`;
   }
-  el.innerHTML=`<div class="tabs">${tabs.map(([k,l])=>`<button data-s="${k}" class="${sub===k?"on":""}">${esc(l)}</button>`).join("")}</div>${body}`;
-  el.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{S.sub.vote=b.dataset.s; render();});
-  el.querySelectorAll("[data-vote]").forEach(b=>b.onclick=()=>busy(b,async()=>{const {error}=await sb.rpc("cast_vote",{p_proposal:b.dataset.vote,p_choice:b.dataset.choice}); if(error) throw error; toast(t("voted")); render();}));
+  await paint(el,{key:"vote:"+sub, chrome:`<div class="tabs">${tabs.map(([k,l])=>`<button data-s="${k}" class="${sub===k?"on":""}">${esc(l)}</button>`).join("")}</div>`, onTab:s=>{S.sub.vote=s;}, load, body, bind:()=>{
+  // the vote shows at once; the server confirms it, or we roll the row back
+  el.querySelectorAll("[data-vote]").forEach(b=>b.onclick=()=>optimistic("vote:"+sub, d=>{ const p=(d.data||[]).find(x=>x.id===b.dataset.vote); if(p){ p.votes=(p.votes||[]).filter(v=>v.member_id!==S.me.id); p.votes.push({proposal_id:p.id,member_id:S.me.id,choice:b.dataset.choice}); } }, async()=>{ const {error}=await sb.rpc("cast_vote",{p_proposal:b.dataset.vote,p_choice:b.dataset.choice}); if(error) throw error; }, t("voted")));
   el.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>busy(b,async()=>{const {data,error}=await sb.rpc("close_proposal",{p_proposal:b.dataset.close}); if(error) throw error; toast(t(data)); render();}));
   const pf=$("#propf"); if(pf){ const sync=()=>{ const sc=pf.kind.value==="settings_change"; $("#setWrap").style.display=sc?"":"none"; $("#amtWrap").style.display=sc?"none":""; }; pf.kind.onchange=sync; sync();
     pf.onsubmit=e=>{e.preventDefault(); busy(pf.querySelector("button"),async()=>{ const d=form(pf); let payload=null;
       if(d.kind==="settings_change"){ payload={}; for(const k of SETTING_FIELDS){ const v=d["s_"+k]; if(v!=null && v!=="") payload[k]= (k==="loan_interest_method"||k==="target_date")? v : Number(v); } if(!Object.keys(payload).length) throw new Error(t("nochange")); }
       const {error}=await sb.rpc("open_proposal",{p_kind:d.kind,p_title:d.title,p_description:d.description||null,p_amount:d.amount?Number(d.amount):null,p_payload:payload}); if(error) throw error; S.sub.vote="open"; toast(t("open")); render(); });}; }
+  }});
 }
 
 // ---------------------------------------------------------------- member edit (via update-member function)
@@ -679,13 +740,12 @@ function bindMemberEdit(el, after){
 
 // ---------------------------------------------------------------- more
 async function moreView(el){
-  await loadMembers(); const st=S.settings;
+  const st=S.settings;
   const sub=S.sub.more||"members"; const tabs=[["members",t("memberslist")],["rules",t("rules")],["meet",t("meetings")],["fines",t("allfines")],["invest",t("investments")],["account",t("account")]];
-  let body="";
+  let load=null, body=null;
   if(sub==="members"){
-    const {data:roles}=await sb.from("role_assignments").select("*").lte("term_start",today()).gte("term_end",today());
-    const {data:bals}=await sb.from("member_balances").select("*");
-    body=`<div class="sheet">${S.cache.members.map(m=>{ const rs=(roles||[]).filter(r=>r.member_id===m.id); const b=(bals||[]).find(x=>x.member_id===m.id);
+    load=LOADERS["more:members"];
+    body=({roles,bals})=>`<div class="sheet">${(S.cache.members||[]).map(m=>{ const rs=(roles||[]).filter(r=>r.member_id===m.id); const b=(bals||[]).find(x=>x.member_id===m.id);
       const editing=S.sub.editMember===m.id;
       const sub=[rs.map(r=>t(r.role)).join(", "), m.user_id?"":t("noaccount"), m.phone].filter(Boolean).join(" · ") || "@"+(m.username||"");
       return `<div class="row" style="flex-direction:column;gap:0">
@@ -710,15 +770,15 @@ async function moreView(el){
       <label class="f"><span>${esc(t("newpin"))}</span><input name="new_pin" inputmode="numeric" pattern="\\d{6}" maxlength="6" required></label>
       <button class="btn full" style="margin-top:14px" type="submit">${esc(t("reset"))}</button></form></div></details></div>`:""}`;
   } else if(sub==="rules"){
-    body=`<div class="sheet"><div class="sect">${ic("scroll")}<h3>${esc(t("rules"))}</h3></div><div class="row" style="padding-top:0;border-top:0"><p class="small muted">${esc(t("effective"))} ${esc(fmtDate(st.effective_from))}${st.note?` · ${esc(st.note)}`:""}</p></div>${SETTING_FIELDS.map(k=>`<div class="row between small"><span>${esc(t("s_"+k))}</span><span class="amt num">${esc(settingDisplay(k,st[k]))}</span></div>`).join("")}</div>
+    body=()=>`<div class="sheet"><div class="sect">${ic("scroll")}<h3>${esc(t("rules"))}</h3></div><div class="row" style="padding-top:0;border-top:0"><p class="small muted">${esc(t("effective"))} ${esc(fmtDate(st.effective_from))}${st.note?` · ${esc(st.note)}`:""}</p></div>${SETTING_FIELDS.map(k=>`<div class="row between small"><span>${esc(t("s_"+k))}</span><span class="amt num">${esc(settingDisplay(k,st[k]))}</span></div>`).join("")}</div>
       <button class="btn quiet full" id="goProp">${esc(t("proposechange"))}</button>`;
   } else if(sub==="meet"){
     const canRun=has("secretary")||has("chairperson"); const fine=Number(st.meeting_absence_fine||0);
-    const {data:ms}=await sb.from("meetings").select("*").order("held_on",{ascending:false});
-    const openId=S.sub.meeting; let att=[], mfines=[];
-    if(openId){ const [{data:a},{data:f}]=await Promise.all([sb.from("meeting_attendance").select("*").eq("meeting_id",openId), sb.from("penalties").select("id").eq("meeting_id",openId)]); att=a||[]; mfines=f||[]; }
+    const openId=S.sub.meeting;
+    load=()=>Promise.all([loadMembers(), sb.from("meetings").select("*").order("held_on",{ascending:false}), openId? sb.from("meeting_attendance").select("*").eq("meeting_id",openId) : Promise.resolve({data:[]}), openId? sb.from("penalties").select("id").eq("meeting_id",openId) : Promise.resolve({data:[]})]).then(([,m,a,f])=>({ms:m.data,att:a.data||[],mfines:f.data||[]}));
+    body=({ms,att,mfines})=>{
     if(openId && S.sub.attFor!==openId){ const map={}; S.cache.members.filter(m=>m.status==="active").forEach(m=>{map[m.id]="present";}); att.forEach(a=>{map[a.member_id]= a.present?"present":(a.excused?"excused":"absent");}); S.sub.att=map; S.sub.attFor=openId; }
-    body=`<div class="sheet">${ms?.length? ms.map(m=>{ const openM=openId===m.id;
+    return `<div class="sheet">${ms?.length? ms.map(m=>{ const openM=openId===m.id;
       const rows=(canRun&&openM&&m.status!=="cancelled")? S.cache.members.filter(x=>x.status==="active").map(x=>{ const cur=(S.sub.att||{})[x.id]||"present";
         return `<div class="row between" style="padding:9px 0;border-top:1px solid var(--line)"><span class="name" style="flex:1;min-width:0">${esc(x.full_name)}</span><span class="btnrow">${["present","excused","absent"].map(c=>`<button class="btn sm ${cur===c?"":"quiet"}" data-att="${x.id}" data-choice="${c}">${esc(t(c))}</button>`).join("")}</span></div>`; }).join("") : "";
       return `<div class="row" style="flex-direction:column;align-items:stretch" data-anchor="${m.id}"><button class="prow" data-meet="${m.id}"><span class="av">${ic("calendar")}</span><span class="l"><span class="name">${esc(m.title)}</span><span class="sub">${esc(fmtDate(m.held_on))}${m.starts_at?` · ${esc(String(m.starts_at).slice(0,5))}`:""}${m.location?` · ${esc(m.location)}`:""}</span></span><span class="r">${pillFor(m.status)}</span></button>${openM?`${m.agenda?`<p class="small" style="margin-top:10px"><b>${esc(t("agenda"))}</b><br>${esc(m.agenda)}</p>`:""}${canRun?`<form id="minf"><label class="f"><span>${esc(t("minutes"))}</span><textarea name="minutes" rows="4">${esc(m.minutes||"")}</textarea></label><button class="btn quiet full" style="margin-top:10px" type="submit">${esc(t("savemins"))}</button></form>`:(m.minutes?`<p class="small" style="margin-top:10px"><b>${esc(t("minutes"))}</b><br>${esc(m.minutes)}</p>`:"")}${rows?`<div class="sect" style="padding:14px 0 6px">${ic("people")}<h3>${esc(t("attendance"))}</h3></div>${rows}<button class="btn full" style="margin-top:12px" id="saveAtt">${esc(t("saveattendance"))}</button>${mfines.length?`<p class="hint" style="margin-top:8px">${esc(t("finesnotretracted"))}</p>`:""}`:""}${(canRun&&m.status!=="cancelled")?(m.fines_charged_at?`<p class="hint" style="margin-top:12px">${mfines.length} ${esc(t("finesraised"))} · ${esc(t("chargedon"))} ${esc(fmtDate(m.fines_charged_at))}</p>`:`<p class="hint" style="margin-top:12px">${fine>0? esc(t("absencefinewarn"))+" "+esc(money(fine)) : esc(t("nofineset"))}</p><button class="btn quiet full" style="margin-top:8px" id="closeMeet">${esc(t("closemeeting"))}</button>`):""}<div class="btnrow" style="margin-top:12px">${shareRow("#/m/"+m.code, m.title+" · "+fmtDate(m.held_on), m.code)}</div>`:""}</div>`; }).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>
@@ -730,20 +790,20 @@ async function moreView(el){
       <label class="f"><span>${esc(t("agenda"))}</span><textarea name="agenda"></textarea></label>
       <label class="f"><span>${esc(t("status"))}</span><select name="status" id="mstat"><option value="scheduled">${esc(t("scheduled"))}</option><option value="held">${esc(t("held"))}</option></select></label>
       <p class="hint" id="mstathint"></p>
-      <button class="btn full" style="margin-top:14px" type="submit">${esc(t("add"))}</button></form></div></details></div>`:""}`;
+      <button class="btn full" style="margin-top:14px" type="submit">${esc(t("add"))}</button></form></div></details></div>`:""}`; };
   } else if(sub==="fines"){
-    const {data:pens}=await sb.from("penalties").select("*").order("created_at",{ascending:false});
-    const all=(pens||[]).slice().sort((a,b)=>(a.status==="pending"?0:1)-(b.status==="pending"?0:1));
+    load=()=>withMembers(sb.from("penalties").select("*").order("created_at",{ascending:false}));
+    body=({data:pens})=>{ const all=(pens||[]).slice().sort((a,b)=>(a.status==="pending"?0:1)-(b.status==="pending"?0:1));
     const pend=all.filter(x=>x.status==="pending"); const ptot=pend.reduce((a,x)=>a+Number(x.amount||0),0);
-    body=`<div class="sheet"><div class="sect">${ic("money")}<h3>${esc(t("allfines"))}</h3></div>${all.length?`<div class="row between small"><span>${esc(t("pendingtotal"))}</span><span class="amt num">${pend.length} · ${money(ptot)}</span></div>`:""}
+    return `<div class="sheet"><div class="sect">${ic("money")}<h3>${esc(t("allfines"))}</h3></div>${all.length?`<div class="row between small"><span>${esc(t("pendingtotal"))}</span><span class="amt num">${pend.length} · ${money(ptot)}</span></div>`:""}
     ${all.length? all.map(x=>{ const own = x.member_id===S.me.id;
       const pay = (own && x.status==="pending")? `<button class="btn quiet sm" data-payfine="${x.id}" data-amt="${x.amount}" data-per="${x.period||""}">${esc(t("deposit"))}</button>` : "";
       const act = !(has("chairperson") && !own)? "" : x.status==="pending"? `<button class="btn quiet sm" data-waive="${x.id}">${esc(t("waive"))}</button>` : x.status==="waived"? `<button class="btn quiet sm" data-restore="${x.id}">${esc(t("restore"))}</button>` : "";
-      return `<div class="row" style="flex-direction:column;align-items:stretch"><div class="prow"><span class="av">${esc(initials(memberName(x.member_id)))}</span><span class="l"><span class="name">${esc(memberName(x.member_id))}</span><span class="sub">${esc((x.reason||t(x.kind))+(x.period?" · "+fmtMonth(x.period):""))}</span></span></div><div class="btnrow" style="margin-top:8px;align-items:center;justify-content:flex-end"><span class="amt num">${money(x.amount)}</span>${pillFor(x.status)}${pay}${act}</div></div>`; }).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>`;
+      return `<div class="row" style="flex-direction:column;align-items:stretch"><div class="prow"><span class="av">${esc(initials(memberName(x.member_id)))}</span><span class="l"><span class="name">${esc(memberName(x.member_id))}</span><span class="sub">${esc((x.reason||t(x.kind))+(x.period?" · "+fmtMonth(x.period):""))}</span></span></div><div class="btnrow" style="margin-top:8px;align-items:center;justify-content:flex-end"><span class="amt num">${money(x.amount)}</span>${pillFor(x.status)}${pay}${act}</div></div>`; }).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>`; };
   } else if(sub==="invest"){
-    const {data}=await sb.from("investments").select("*, investment_valuations(value,valued_on)").order("created_at",{ascending:false});
+    load=()=>sb.from("investments").select("*, investment_valuations(value,valued_on)").order("created_at",{ascending:false});
     const canEdit=has("investment_lead")||has("treasurer");
-    body=`<div class="sheet">${data?.length? data.map(i=>{ const v=(i.investment_valuations||[]).sort((a,b)=>b.valued_on.localeCompare(a.valued_on))[0];
+    body=({data})=>`<div class="sheet">${data?.length? data.map(i=>{ const v=(i.investment_valuations||[]).sort((a,b)=>b.valued_on.localeCompare(a.valued_on))[0];
       return `<div class="row"><div class="prow"><span class="av">${ic("seed")}</span><span class="l"><span class="name">${esc(i.name)}</span><span class="sub">${esc(t(i.type))}${i.institution?` · ${esc(i.institution)}`:""}${i.invested_on?` · ${esc(fmtDate(i.invested_on))}`:""}${i.expected_annual_return_pct?` · ${Number(i.expected_annual_return_pct)}%/yr`:""}</span></span><div class="r"><span class="amt num">${money(v?v.value:i.amount_invested)}</span>${pillFor(i.status==="exited"?"exited_inv":i.status)}${canEdit&&i.status==="active"?`<button class="btn quiet sm" data-val="${i.id}">${esc(t("addvaluation"))}</button>`:""}</div></div></div>`; }).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>
     ${canEdit?`<div class="sheet"><details><summary>${esc(t("addinvestment"))}</summary><div class="body"><form id="invf">
       <label class="f"><span>${esc(t("name"))}</span><input name="name" required></label>
@@ -756,8 +816,8 @@ async function moreView(el){
       <button class="btn full" style="margin-top:14px" type="submit">${esc(t("add"))}</button></form></div></details></div>`:""}`;
   } else {
     const editing=S.sub.editMember===S.me.id;
-    const {data:pen}=await sb.from("penalties").select("*").eq("member_id",S.me.id).order("created_at",{ascending:false});
-    body=`<div class="sheet"><div class="row"><div class="prow"><span class="av" style="width:52px;height:52px;font-size:1rem">${esc(initials(S.me.full_name))}</span><span class="l"><span class="name">${esc(S.me.full_name)}</span><span class="sub">@${esc(S.me.username||"")}${S.roles.length?" · "+S.roles.map(r=>esc(t(r))).join(", "):""}</span></span>${editing?"":`<button class="btn quiet sm" data-edit="${S.me.id}">${esc(t("editprofile"))}</button>`}</div>${editing?memberEditForm(S.me,{officer:false}):""}</div>
+    load=()=>sb.from("penalties").select("*").eq("member_id",S.me.id).order("created_at",{ascending:false});
+    body=({data:pen})=>`<div class="sheet"><div class="row"><div class="prow"><span class="av" style="width:52px;height:52px;font-size:1rem">${esc(initials(S.me.full_name))}</span><span class="l"><span class="name">${esc(S.me.full_name)}</span><span class="sub">@${esc(S.me.username||"")}${S.roles.length?" · "+S.roles.map(r=>esc(t(r))).join(", "):""}</span></span>${editing?"":`<button class="btn quiet sm" data-edit="${S.me.id}">${esc(t("editprofile"))}</button>`}</div>${editing?memberEditForm(S.me,{officer:false}):""}</div>
       <div class="row"><form id="cpf"><label class="f"><span>${esc(t("changepin"))}</span><input name="pin" type="password" inputmode="numeric" pattern="\\d{6}" maxlength="6" required placeholder="${esc(t("newpin"))}"></label><button class="btn quiet full" style="margin-top:10px" type="submit">${esc(t("changepin"))}</button></form></div>
       <div class="row"><button class="btn quiet full" id="so">${esc(t("signout"))}</button></div></div>
       <div class="sheet"><div class="sect">${ic("money")}<h3>${esc(t("fines"))}</h3></div>${pen?.length? pen.map(x=>{ const own = x.member_id===S.me.id;
@@ -765,10 +825,9 @@ async function moreView(el){
       const act = !(has("chairperson") && !own)? "" : x.status==="pending"? `<button class="btn quiet sm" data-waive="${x.id}">${esc(t("waive"))}</button>` : x.status==="waived"? `<button class="btn quiet sm" data-restore="${x.id}">${esc(t("restore"))}</button>` : "";
         return `<div class="row" style="flex-direction:column;align-items:stretch"><div class="prow"><span class="av">${ic("money")}</span><span class="l"><span class="name">${esc(x.reason||t(x.kind))}</span><span class="sub">${esc(x.period? fmtMonth(x.period) : t(x.kind))}</span></span></div><div class="btnrow" style="margin-top:8px;align-items:center;justify-content:flex-end"><span class="amt num">${money(x.amount)}</span>${pillFor(x.status)}${pay}${act}</div></div>`; }).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>`;
   }
-  el.innerHTML=`<div class="tabs">${tabs.map(([k,l])=>`<button data-s="${k}" class="${sub===k?"on":""}">${esc(l)}</button>`).join("")}</div>${body}`;
-  el.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{S.sub.more=b.dataset.s; render();});
+  await paint(el,{key: sub==="meet"? "more:meet:"+(S.sub.meeting||"") : "more:"+sub, chrome:`<div class="tabs">${tabs.map(([k,l])=>`<button data-s="${k}" class="${sub===k?"on":""}">${esc(l)}</button>`).join("")}</div>`, onTab:s=>{S.sub.more=s;}, load, body, bind:()=>{
   const on=(id,fn)=>{const f=document.getElementById(id); if(f) f.onsubmit=e=>{e.preventDefault(); busy(f.querySelector("button[type=submit]"),()=>fn(form(f),f));};};
-  on("memf", async d=>{ const {error}=await sb.from("members").insert({full_name:d.full_name,username:d.username.toLowerCase().trim(),phone:d.phone||null,language:d.language}); if(error) throw error; toast(t("saved")); render(); });
+  on("memf", async d=>{ const {error}=await sb.from("members").insert({full_name:d.full_name,username:d.username.toLowerCase().trim(),phone:d.phone||null,language:d.language}); if(error) throw error; S.cache.members=null; invalidateAll(); toast(t("saved")); render(); });
   on("rolef", async d=>{ const ts=new Date(); let te;
     if(d.role==="admin"){ te="2099-12-31"; }
     else { const e=new Date(ts); e.setMonth(e.getMonth()+Number(st.officer_term_months)); te=localISO(e); }
@@ -789,15 +848,16 @@ async function moreView(el){
   on("cpf", async d=>{ if(!/^\d{6}$/.test(d.pin)) throw new Error(t("pinformat")); const {error}=await sb.auth.updateUser({password:d.pin}); if(error) throw error; toast(t("saved")); });
   el.querySelectorAll("[data-val]").forEach(b=>b.onclick=()=>{ const v=prompt(t("value")); if(!v) return; busy(b,async()=>{const {error}=await sb.from("investment_valuations").insert({investment_id:b.dataset.val,valued_on:today(),value:Number(v)}); if(error) throw error; toast(t("saved")); render();}); });
   el.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{S.sub.editMember=b.dataset.edit; render();});
-  bindMemberEdit(el, loadContext);
+  bindMemberEdit(el, async()=>{ S.cache.members=null; invalidateAll(); await loadContext(); });
   const gp=$("#goProp"); if(gp) gp.onclick=()=>{S.tab="vote"; S.sub.vote="new"; render();};
   const so=$("#so"); if(so) so.onclick=signOut;
+  }});
 }
 
 // ---------------------------------------------------------------- boot
 sb.auth.onAuthStateChange((ev)=>{ if(ev==="SIGNED_OUT"){ S.session=null; S.me=null; S.roles=[]; render(); } });
 window.addEventListener("hashchange", async()=>{ S.route=parseHash(); if(S.me) await applyRoute(); render(); });
-(async()=>{ try{ await loadContext(); } catch(e){ console.error(e); } S.route=parseHash(); if(S.me) await applyRoute(); render(); })();
+(async()=>{ try{ await loadContext(); } catch(e){ console.error(e); } S.route=parseHash(); if(S.me){ prefetch(); await applyRoute(); } render(); })();
 if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
 </body>
