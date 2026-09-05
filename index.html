@@ -230,6 +230,7 @@ const STR = {
     share:"Share", linkcopied:"Link copied", waive:"Forgive", restore:"Restore", deposit:"Deposit",
     allfines:"All fines", pendingtotal:"Pending fines", chargedon:"charged on",
     contribution:"Contribution", plusfines:"plus fines", finesowed:"fines owed",
+    alldeposits:"All deposits", sharecode:"Code", depositstotal:"Deposits shown",
     finesnotretracted:"Saving attendance again does not cancel fines already charged — forgive those from the member's Fines list.", heldhint:"Fines are not charged now. Open the meeting afterwards and use the close button.",
     meetings:"Meetings", schedulemeeting:"Schedule a meeting", date:"Date", time:"Time", location:"Location", agenda:"Agenda", minutes:"Minutes", savemins:"Save minutes", attendance:"Attendance", present:"Present", excused:"Excused", absent:"Absent", saveattendance:"Save attendance", closemeeting:"Close meeting and charge fines", absencefinewarn:"Each absent member will be fined", nofineset:"No absence fine is set.", finesraised:"fines raised", scheduled:"Scheduled", held:"Held", fines:"Fines", late_deposit:"Late deposit", missed_meeting:"Missed a meeting", waived:"Forgiven", infines:"in fines", tapview:"Tap to view", s_meeting_absence_fine:"Fine for missing a meeting",
     s_initial_deposit:"Initial deposit", s_monthly_contribution:"Monthly contribution", s_deposit_day:"Deposit day of month", s_grace_days:"Grace days", s_late_fine:"Late fine", s_missed_months_before_suspension:"Missed months before suspension",
@@ -260,6 +261,7 @@ const STR = {
     share:"Sambaza", linkcopied:"Kiungo kimenakiliwa", waive:"Samehe", restore:"Rudisha", deposit:"Lipa",
     allfines:"Faini zote", pendingtotal:"Faini zinazosubiri", chargedon:"zimetozwa tarehe",
     contribution:"Mchango", plusfines:"pamoja na faini", finesowed:"faini anazodaiwa",
+    alldeposits:"Michango yote", sharecode:"Msimbo", depositstotal:"Michango iliyoonyeshwa",
     finesnotretracted:"Kuhifadhi mahudhurio tena hakufuti faini zilizokwisha tozwa — zisamehe kutoka kwenye orodha ya Faini ya mwanachama.", heldhint:"Faini hazitozwi sasa. Fungua mkutano baadaye kisha tumia kitufe cha kufunga.",
     meetings:"Mikutano", schedulemeeting:"Panga mkutano", date:"Tarehe", time:"Saa", location:"Mahali", agenda:"Ajenda", minutes:"Muhtasari", savemins:"Hifadhi muhtasari", attendance:"Mahudhurio", present:"Yupo", excused:"Ameruhusiwa", absent:"Hayupo", saveattendance:"Hifadhi mahudhurio", closemeeting:"Funga mkutano na utoze faini", absencefinewarn:"Kila asiyehudhuria atatozwa faini ya", nofineset:"Hakuna faini ya kutohudhuria iliyowekwa.", finesraised:"faini zimetozwa", scheduled:"Umepangwa", held:"Umefanyika", fines:"Faini", late_deposit:"Mchango wa kuchelewa", missed_meeting:"Kukosa mkutano", waived:"Imesamehewa", infines:"za faini", tapview:"Gusa kuona", s_meeting_absence_fine:"Faini ya kukosa mkutano",
     s_initial_deposit:"Mchango wa kwanza", s_monthly_contribution:"Mchango wa kila mwezi", s_deposit_day:"Tarehe ya mchango", s_grace_days:"Siku za nafasi", s_late_fine:"Faini ya kuchelewa", s_missed_months_before_suspension:"Miezi ya kukosa kabla ya kusimamishwa",
@@ -342,19 +344,25 @@ async function loadContext(){
   }
 }
 // ---------------------------------------------------------------- links
-function parseHash(){ const m=/^#\/(proposal|meeting)\/([0-9a-f-]{36})$/i.exec(location.hash||""); return m? {kind:m[1].toLowerCase(), id:m[2]} : null; }
+function parseHash(){ const h=location.hash||"";
+  let m=/^#\/(p|m)\/([a-z0-9]{6})$/i.exec(h);
+  if(m) return {kind: m[1].toLowerCase()==="p"?"proposal":"meeting", code:m[2].toLowerCase()};
+  m=/^#\/(proposal|meeting)\/([0-9a-f-]{36})$/i.exec(h);
+  return m? {kind:m[1].toLowerCase(), id:m[2]} : null; }
 async function applyRoute(){
   const r=S.route; if(!r) return; S.route=null;
+  const col=r.code? "code":"id", val=r.code||r.id;
   if(r.kind==="proposal"){
-    const {data}=await sb.from("proposals").select("id,status").eq("id",r.id).maybeSingle();
+    const {data}=await sb.from("proposals").select("id,status").eq(col,val).maybeSingle();
     if(!data) return toast(t("nothing"),true);
     S.tab="vote"; S.sub.vote = data.status==="open"? "open" : "past";
+    S.scrollTo=data.id;
   } else {
-    const {data}=await sb.from("meetings").select("id").eq("id",r.id).maybeSingle();
+    const {data}=await sb.from("meetings").select("id").eq(col,val).maybeSingle();
     if(!data) return toast(t("nothing"),true);
-    S.tab="more"; S.sub.more="meet"; S.sub.meeting=r.id; S.sub.attFor=null;
+    S.tab="more"; S.sub.more="meet"; S.sub.meeting=data.id; S.sub.attFor=null;
+    S.scrollTo=data.id;
   }
-  S.scrollTo=r.id;
 }
 async function shareLink(path, title){
   const url = location.origin + location.pathname + path;
@@ -366,6 +374,7 @@ async function shareLink(path, title){
   } catch (e) { if (e?.name !== "AbortError") toast(url, false); }
 }
 const shareBtn=(path,title)=>`<button class="btn ghost sm" data-share="${esc(path)}" data-title="${esc(title)}">${ic("share")}${esc(t("share"))}</button>`;
+const shareRow=(path,title,code)=>`${shareBtn(path,title)}${code?`<span class="tiny muted" style="align-self:center">${esc(t("sharecode"))} ${esc(code)}</span>`:""}`;
 async function loadMembers(){ const {data,error}=await sb.from("members").select("*").order("full_name"); if(error) throw error; S.cache.members=data; return data; }
 
 // ---------------------------------------------------------------- render root
@@ -529,7 +538,7 @@ function bindDepositForm(id, officer){
 }
 async function moneyView(el){
   await loadMembers();
-  const sub=S.sub.money||"mine"; const tabs=[["mine",t("myhistory")],["submit",t("submitdeposit")],["month",t("whopaid")]];
+  const sub=S.sub.money||"mine"; const tabs=[["mine",t("myhistory")],["all",t("alldeposits")],["submit",t("submitdeposit")],["month",t("whopaid")]];
   if(has("treasurer")) tabs.push(["review",t("awaiting")],["record",t("recorddeposit")]);
   let body="";
   if(sub==="mine"){
@@ -540,6 +549,12 @@ async function moneyView(el){
   else if(sub==="month"){
     const {data}=await sb.from("member_month_status").select("*").eq("period",monthStart());
     body=`<div class="sheet"><div class="row head"><h3>${esc(fmtMonth(monthStart()))}</h3><span class="small muted num">${(data||[]).filter(x=>x.status==="paid").length} ${esc(t("of"))} ${(data||[]).length}</span></div><div class="month-grid">${(data||[]).map(x=>`<div class="${x.status}"><b>${esc(memberName(x.member_id))}</b><span class="tiny">${esc(t(x.status==="missing"?"notyet":x.status))}</span>${Number(x.fines_due||0)>0?`<span class="tiny" style="display:block">+ ${esc(money(x.fines_due))}</span>`:""}</div>`).join("")}</div></div>`;
+  } else if(sub==="all"){
+    await loadMembers();
+    const {data}=await sb.from("contributions").select("*").eq("status","confirmed").order("paid_on",{ascending:false}).limit(100);
+    const ds=data||[]; const dtot=ds.reduce((a,x)=>a+Number(x.amount||0),0);
+    body=`<div class="sheet"><div class="sect">${ic("money")}<h3>${esc(t("alldeposits"))}</h3></div>${ds.length?`<div class="row between small"><span>${esc(t("depositstotal"))}</span><span class="amt num">${ds.length} · ${money(dtot)}</span></div>`:""}
+    ${ds.length? ds.map(c=>`<div class="row"><div class="prow top"><span class="av">${esc(initials(memberName(c.member_id)))}</span><span class="l"><span class="name">${esc(memberName(c.member_id))}</span><span class="sub wrap">${esc(t(c.kind))}${c.period?` · ${esc(fmtMonth(c.period))}`:""} · ${esc(fmtDate(c.paid_on))}${c.channel?` · ${esc(c.channel)}`:""}${c.reference?` · ${esc(c.reference)}`:""}</span></span><span class="amt num">${money(c.amount)}</span></div></div>`).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>`;
   } else if(sub==="review"){
     const {data}=await sb.from("contributions").select("*").eq("status","submitted").order("created_at");
     body = data?.length? `<div class="sheet">${data.map(c=>`<div class="row" style="flex-direction:column"><div class="prow top"><span class="av">${esc(initials(memberName(c.member_id)))}</span><span class="l"><span class="name">${esc(memberName(c.member_id))}</span><span class="sub wrap">${esc(t(c.kind))}${c.period?` · ${esc(fmtMonth(c.period))}`:""} · ${esc(fmtDate(c.paid_on))} · ${esc(c.channel||"")} ${esc(c.reference||"")}</span></span><span class="amt num">${money(c.amount)}</span></div>
@@ -620,7 +635,7 @@ async function voteView(el){
       const payloadRows = p.kind==="settings_change"&&p.payload? Object.entries(p.payload).map(([k,v])=>`<div class="row between small"><span>${esc(t("s_"+k))}</span><span class="num">${esc(settingDisplay(k,S.settings[k]))} → <b>${esc(settingDisplay(k,v))}</b></span></div>`).join("") : "";
       return `<div class="sheet" data-anchor="${p.id}"><div class="row"><div class="row head" style="padding:0"><h3>${esc(p.title)}</h3>${pillFor(p.status)}</div><p class="small muted">${esc(t(p.kind))}${p.amount?` · ${money(p.amount)}`:""} · ${esc(memberName(p.proposed_by))}</p>${p.description?`<p class="small" style="margin-top:6px">${esc(p.description)}</p>`:""}</div>${payloadRows}
       <div class="row"><p class="small num"><b>${yes}</b> ${esc(t("yes"))} · <b>${no}</b> ${esc(t("no"))} · ${needed} ${esc(t("needed"))} (${p.eligible_voters} ${esc(t("members")).toLowerCase()})</p>${p.status==="open"?`<p class="small muted">${esc(t("closes"))} ${esc(fmtDate(p.closes_at))}${mine?` · ${esc(t("voted"))}: ${esc(t(mine.choice))}`:""}</p>
-        <div class="btnrow" style="margin-top:10px">${["yes","no","abstain"].map(c=>`<button class="btn sm ${mine?.choice===c?"":"quiet"}" data-vote="${p.id}" data-choice="${c}">${esc(t(c))}</button>`).join("")}${canClose?`<button class="btn ghost sm" data-close="${p.id}">${esc(t("close"))}</button>`:""}${shareBtn("#/proposal/"+p.id, t("vote")+": "+p.title)}</div>`:`<div class="btnrow" style="margin-top:10px">${shareBtn("#/proposal/"+p.id, t("vote")+": "+p.title)}</div>`}</div></div>`; }).join("") : `<div class="sheet"><div class="empty">${esc(t("nothing"))}</div></div>`;
+        <div class="btnrow" style="margin-top:10px">${["yes","no","abstain"].map(c=>`<button class="btn sm ${mine?.choice===c?"":"quiet"}" data-vote="${p.id}" data-choice="${c}">${esc(t(c))}</button>`).join("")}${canClose?`<button class="btn ghost sm" data-close="${p.id}">${esc(t("close"))}</button>`:""}${shareRow("#/p/"+p.code, t("vote")+": "+p.title, p.code)}</div>`:`<div class="btnrow" style="margin-top:10px">${shareRow("#/p/"+p.code, t("vote")+": "+p.title, p.code)}</div>`}</div></div>`; }).join("") : `<div class="sheet"><div class="empty">${esc(t("nothing"))}</div></div>`;
   } else {
     body=`<div class="sheet"><div class="row"><form id="propf">
       <label class="f"><span>${esc(t("proposalkind"))}</span><select name="kind" id="pkind">${["investment","expense","settings_change","member_change","other"].map(k=>`<option value="${k}">${esc(t(k))}</option>`).join("")}</select></label>
@@ -706,7 +721,7 @@ async function moreView(el){
     body=`<div class="sheet">${ms?.length? ms.map(m=>{ const openM=openId===m.id;
       const rows=(canRun&&openM&&m.status!=="cancelled")? S.cache.members.filter(x=>x.status==="active").map(x=>{ const cur=(S.sub.att||{})[x.id]||"present";
         return `<div class="row between" style="padding:9px 0;border-top:1px solid var(--line)"><span class="name" style="flex:1;min-width:0">${esc(x.full_name)}</span><span class="btnrow">${["present","excused","absent"].map(c=>`<button class="btn sm ${cur===c?"":"quiet"}" data-att="${x.id}" data-choice="${c}">${esc(t(c))}</button>`).join("")}</span></div>`; }).join("") : "";
-      return `<div class="row" style="flex-direction:column;align-items:stretch" data-anchor="${m.id}"><button class="prow" data-meet="${m.id}"><span class="av">${ic("calendar")}</span><span class="l"><span class="name">${esc(m.title)}</span><span class="sub">${esc(fmtDate(m.held_on))}${m.starts_at?` · ${esc(String(m.starts_at).slice(0,5))}`:""}${m.location?` · ${esc(m.location)}`:""}</span></span><span class="r">${pillFor(m.status)}</span></button>${openM?`${m.agenda?`<p class="small" style="margin-top:10px"><b>${esc(t("agenda"))}</b><br>${esc(m.agenda)}</p>`:""}${canRun?`<form id="minf"><label class="f"><span>${esc(t("minutes"))}</span><textarea name="minutes" rows="4">${esc(m.minutes||"")}</textarea></label><button class="btn quiet full" style="margin-top:10px" type="submit">${esc(t("savemins"))}</button></form>`:(m.minutes?`<p class="small" style="margin-top:10px"><b>${esc(t("minutes"))}</b><br>${esc(m.minutes)}</p>`:"")}${rows?`<div class="sect" style="padding:14px 0 6px">${ic("people")}<h3>${esc(t("attendance"))}</h3></div>${rows}<button class="btn full" style="margin-top:12px" id="saveAtt">${esc(t("saveattendance"))}</button>${mfines.length?`<p class="hint" style="margin-top:8px">${esc(t("finesnotretracted"))}</p>`:""}`:""}${(canRun&&m.status!=="cancelled")?(m.fines_charged_at?`<p class="hint" style="margin-top:12px">${mfines.length} ${esc(t("finesraised"))} · ${esc(t("chargedon"))} ${esc(fmtDate(m.fines_charged_at))}</p>`:`<p class="hint" style="margin-top:12px">${fine>0? esc(t("absencefinewarn"))+" "+esc(money(fine)) : esc(t("nofineset"))}</p><button class="btn quiet full" style="margin-top:8px" id="closeMeet">${esc(t("closemeeting"))}</button>`):""}<div class="btnrow" style="margin-top:12px">${shareBtn("#/meeting/"+m.id, m.title+" · "+fmtDate(m.held_on))}</div>`:""}</div>`; }).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>
+      return `<div class="row" style="flex-direction:column;align-items:stretch" data-anchor="${m.id}"><button class="prow" data-meet="${m.id}"><span class="av">${ic("calendar")}</span><span class="l"><span class="name">${esc(m.title)}</span><span class="sub">${esc(fmtDate(m.held_on))}${m.starts_at?` · ${esc(String(m.starts_at).slice(0,5))}`:""}${m.location?` · ${esc(m.location)}`:""}</span></span><span class="r">${pillFor(m.status)}</span></button>${openM?`${m.agenda?`<p class="small" style="margin-top:10px"><b>${esc(t("agenda"))}</b><br>${esc(m.agenda)}</p>`:""}${canRun?`<form id="minf"><label class="f"><span>${esc(t("minutes"))}</span><textarea name="minutes" rows="4">${esc(m.minutes||"")}</textarea></label><button class="btn quiet full" style="margin-top:10px" type="submit">${esc(t("savemins"))}</button></form>`:(m.minutes?`<p class="small" style="margin-top:10px"><b>${esc(t("minutes"))}</b><br>${esc(m.minutes)}</p>`:"")}${rows?`<div class="sect" style="padding:14px 0 6px">${ic("people")}<h3>${esc(t("attendance"))}</h3></div>${rows}<button class="btn full" style="margin-top:12px" id="saveAtt">${esc(t("saveattendance"))}</button>${mfines.length?`<p class="hint" style="margin-top:8px">${esc(t("finesnotretracted"))}</p>`:""}`:""}${(canRun&&m.status!=="cancelled")?(m.fines_charged_at?`<p class="hint" style="margin-top:12px">${mfines.length} ${esc(t("finesraised"))} · ${esc(t("chargedon"))} ${esc(fmtDate(m.fines_charged_at))}</p>`:`<p class="hint" style="margin-top:12px">${fine>0? esc(t("absencefinewarn"))+" "+esc(money(fine)) : esc(t("nofineset"))}</p><button class="btn quiet full" style="margin-top:8px" id="closeMeet">${esc(t("closemeeting"))}</button>`):""}<div class="btnrow" style="margin-top:12px">${shareRow("#/m/"+m.code, m.title+" · "+fmtDate(m.held_on), m.code)}</div>`:""}</div>`; }).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>
     ${canRun?`<div class="sheet"><details><summary>${esc(t("schedulemeeting"))}</summary><div class="body"><form id="meetf">
       <label class="f"><span>${esc(t("title"))}</span><input name="title" required></label>
       <label class="f"><span>${esc(t("date"))}</span><input name="held_on" type="date" value="${today()}" required></label>
