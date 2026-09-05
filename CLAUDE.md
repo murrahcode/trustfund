@@ -25,7 +25,11 @@ able to change contributions, add members, and amend rules without a deploy.
   change inserts a new row; it never updates the old one, so past months keep
   the rules that applied then. `current_settings(date)` returns the row in force.
 - `members`, `role_assignments` — people and time-boxed officer terms
-  (chairperson, treasurer, secretary, investment_lead).
+  (chairperson, treasurer, secretary, investment_lead), plus `admin`.
+  **`admin` is the system operator, not an elected office.** `has_role(x)`
+  returns true for an admin whatever `x` is, so admin passes every officer
+  guard and policy without holding a title. Admin terms have no real end date;
+  officer terms run for `officer_term_months`.
 - `contributions` — every deposit. `status`: submitted → confirmed/rejected.
   Members submit their own; the treasurer either confirms or records directly
   as confirmed. `penalties` holds late fines.
