@@ -258,7 +258,7 @@ const STR = {
     flat_per_month:"Riba ya kudumu, kwa mwezi", flat_once:"Riba ya kudumu, mara moja", nochange:"Acha wazi kubaki na thamani ya sasa.",
   }
 };
-let lang = localStorage.getItem("lang") || "sw";
+let lang = localStorage.getItem("lang") || "en";
 const t = k => (STR[lang][k] ?? STR.en[k] ?? k);
 
 // ---------------------------------------------------------------- icons
@@ -627,7 +627,7 @@ async function moreView(el){
       <label class="f"><span>${esc(t("fullname"))}</span><input name="full_name" required></label>
       <label class="f"><span>${esc(t("username"))}</span><input name="username" required pattern="[a-z0-9_]{3,20}" autocapitalize="none"><p class="hint">a–z, 0–9, _ · 3–20</p></label>
       <label class="f"><span>${esc(t("phone"))}</span><input name="phone" inputmode="tel"></label>
-      <label class="f"><span>${esc(t("language"))}</span><select name="language"><option value="sw">Kiswahili</option><option value="en">English</option></select></label>
+      <label class="f"><span>${esc(t("language"))}</span><select name="language"><option value="en" selected>English</option><option value="sw">Kiswahili</option></select></label>
       <button class="btn full" style="margin-top:14px" type="submit">${esc(t("add"))}</button></form></div></details></div>`:""}
     ${has("chairperson")?`<div class="sheet"><details><summary><span style="display:flex;align-items:center;gap:12px"><span class="ico" style="width:38px;height:38px;border-radius:11px;background:var(--g100);display:grid;place-items:center">${ic("shield")}</span>${esc(t("assignrole"))}</span></summary><div class="body"><form id="rolef">
       <label class="f"><span>${esc(t("member"))}</span><select name="member_id">${S.cache.members.filter(m=>m.status==="active").map(m=>`<option value="${m.id}">${esc(m.full_name)}</option>`).join("")}</select></label>
