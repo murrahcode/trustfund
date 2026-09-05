@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1D6B48">
+<title>Bwana Family Fund</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+:root{
+  --bg:#F1F4EF; --surface:#FFFFFF; --ink:#172119; --muted:#66716A; --line:#D5DDD6;
+  --primary:#1D6B48; --primary-ink:#0F4A30; --primary-soft:#DCEFE2;
+  --attn:#C98A1B; --attn-soft:#FBF0D8; --danger:#B23A2B; --danger-soft:#F8E1DC;
+  --r-sheet:14px; --r-ctl:10px; --nav-h:64px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Manrope,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.45;-webkit-font-smoothing:antialiased}
+body{padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom))}
+button,input,select,textarea{font:inherit;color:inherit}
+.num{font-variant-numeric:tabular-nums}
+a{color:var(--primary-ink)}
+h1,h2,h3{margin:0;font-weight:700;letter-spacing:-0.01em}
+h1{font-size:1.6rem;line-height:1.2}
+h2{font-size:1.15rem}
+h3{font-size:1rem}
+p{margin:0}
+.muted{color:var(--muted)}
+.small{font-size:.875rem}
+.app{max-width:540px;margin:0 auto;padding:0 16px}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 0 6px}
+.brand{font-weight:800;font-size:1.05rem;letter-spacing:-0.01em;color:var(--primary-ink)}
+.lang{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 10px;font-size:.8rem;font-weight:600;cursor:pointer}
+.sheet{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-sheet);margin:12px 0;overflow:hidden}
+.sheet > .row{padding:14px 16px;border-top:1px solid var(--line)}
+.sheet > .row:first-child{border-top:0}
+.row.head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.row.between{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.hero{padding:22px 16px 18px}
+.hero .big{font-size:2.2rem;font-weight:800;letter-spacing:-0.02em;line-height:1.1}
+.status{display:inline-flex;align-items:center;gap:8px;font-weight:600}
+.status::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--muted)}
+.status.ok::before{background:var(--primary)}
+.status.wait::before{background:var(--attn)}
+.status.bad::before{background:var(--danger)}
+.bar{height:10px;background:var(--bg);border-radius:999px;overflow:hidden;margin:10px 0 6px}
+.bar > i{display:block;height:100%;background:var(--primary);border-radius:999px;transition:width .5s ease}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kv{padding:12px 14px;border:1px solid var(--line);border-radius:var(--r-ctl);background:var(--surface)}
+.kv .v{font-size:1.25rem;font-weight:700;letter-spacing:-0.01em}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--primary);background:var(--primary);color:#fff;border-radius:var(--r-ctl);padding:11px 16px;font-weight:700;cursor:pointer;min-height:44px}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--primary-ink)}
+.btn.quiet{background:var(--surface);color:var(--ink);border-color:var(--line)}
+.btn.danger{background:var(--danger);border-color:var(--danger)}
+.btn.sm{padding:7px 12px;min-height:36px;font-size:.875rem}
+.btn.full{width:100%}
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+label.f{display:block;margin:12px 0 0}
+label.f > span{display:block;font-size:.875rem;font-weight:600;margin-bottom:6px}
+input,select,textarea{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:var(--r-ctl);padding:11px 12px;min-height:44px;outline:none}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid var(--primary-soft);border-color:var(--primary)}
+textarea{min-height:88px;resize:vertical}
+.hint{font-size:.8rem;color:var(--muted);margin-top:4px}
+.pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:.78rem;font-weight:700;background:var(--bg);color:var(--muted)}
+.pill.ok{background:var(--primary-soft);color:var(--primary-ink)}
+.pill.wait{background:var(--attn-soft);color:#7A5210}
+.pill.bad{background:var(--danger-soft);color:var(--danger)}
+.list .row{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.list .row .l{min-width:0}
+.list .row .r{text-align:right;white-space:nowrap}
+.name{font-weight:600}
+.amt{font-weight:700}
+.nav{position:fixed;left:0;right:0;bottom:0;height:calc(var(--nav-h) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--surface);border-top:1px solid var(--line);display:flex;justify-content:center}
+.nav .in{display:flex;width:100%;max-width:540px}
+.nav button{flex:1;border:0;background:none;padding:8px 4px 6px;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:.72rem;font-weight:600;cursor:pointer}
+.nav button.on{color:var(--primary-ink)}
+.nav svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + 14px);transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:999px;font-weight:600;font-size:.9rem;opacity:0;pointer-events:none;transition:opacity .2s;max-width:92vw;text-align:center;z-index:50}
+.toast.show{opacity:1}
+.toast.err{background:var(--danger)}
+.center{min-height:80vh;display:flex;flex-direction:column;justify-content:center}
+.logo{width:56px;height:56px;border-radius:14px;background:var(--primary);display:flex;align-items:center;justify-content:center;margin-bottom:18px}
+.logo svg{width:32px;height:32px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tabs{display:flex;gap:6px;margin:12px 0 0;overflow-x:auto;scrollbar-width:none}
+.tabs button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 13px;font-weight:600;font-size:.875rem;white-space:nowrap;cursor:pointer;color:var(--muted)}
+.tabs button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.month-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;padding:12px 16px}
+.month-grid div{padding:8px 10px;border-radius:var(--r-ctl);font-size:.8rem;font-weight:600;border:1px solid var(--line)}
+.month-grid .paid{background:var(--primary-soft);border-color:transparent;color:var(--primary-ink)}
+.month-grid .partial{background:var(--attn-soft);border-color:transparent;color:#7A5210}
+.month-grid .missing{background:var(--surface);color:var(--muted)}
+details summary{cursor:pointer;font-weight:600;padding:14px 16px;list-style:none;display:flex;justify-content:space-between}
+details summary::after{content:"+";color:var(--muted)}
+details[open] summary::after{content:"–"}
+details .body{padding:0 16px 16px}
+.empty{padding:22px 16px;color:var(--muted);text-align:center}
+.spinner{padding:40px;text-align:center;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){.bar > i{transition:none}}
+</style>
+</head>
+<body>
+<div id="app" class="app"><div class="spinner">…</div></div>
+<div id="toast" class="toast"></div>
+
+<script>
+// ---------------------------------------------------------------- config
+const SUPABASE_URL = "https://bbvizypslemcczsrfkhs.supabase.co";
+const SUPABASE_KEY = "sb_publishable_bCy8mZ8BOgJswwrdXwt1kg_zuBlemXJ";
+const AUTH_DOMAIN = "fund.local";               // usernames become username@fund.local
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ---------------------------------------------------------------- i18n
+const STR = {
+  en: {
+    signin:"Sign in", first:"First time here? Set your PIN", back:"Back to sign in", username:"Username", pin:"PIN (6 digits)", newpin:"Choose a 6-digit PIN", confirmpin:"Repeat PIN",
+    create:"Create my account", pinmismatch:"PINs do not match", pinformat:"PIN must be exactly 6 digits", welcome:"Welcome to the family fund", tagline:"Save together. Grow together.",
+    home:"Home", money:"Deposits", loans:"Loans", vote:"Vote", more:"More",
+    thismonth:"This month", paid:"Paid", pending:"Awaiting confirmation", notyet:"Not paid yet", partial:"Partly paid", dueby:"Due by", late:"Late — fine may apply",
+    fundvalue:"Fund value", target:"Target", cash:"Cash on hand", onloan:"Out on loan", invested:"Invested", members:"Members", progress:"of the way there",
+    yourshares:"Your shares", canborrow:"You can borrow up to", needsyou:"Needs your attention", toconfirm:"deposits to confirm", loanreqs:"loan requests", openvotes:"open votes", allgood:"Nothing waiting for you.",
+    submitdeposit:"Submit a deposit", recorddeposit:"Record a member's deposit", kind:"Type", monthly:"Monthly contribution", initial:"Initial deposit", extra:"Extra saving", fine:"Fine payment", emergency_repayment:"Emergency repayment",
+    formonth:"For month", amount:"Amount", paidon:"Paid on", channel:"Paid via", reference:"Transaction reference", proof:"Screenshot (optional)", note:"Note", submit:"Submit", record:"Record as confirmed", member:"Member",
+    myhistory:"My deposits", awaiting:"Awaiting confirmation", whopaid:"Who has paid this month", confirm:"Confirm", reject:"Reject", rejectreason:"Reason for rejecting",
+    submitted:"Submitted", confirmed:"Confirmed", rejected:"Rejected", by:"by", nothing:"Nothing here yet.",
+    eligibility:"Borrowing", eligible:"You can request a loan", noteligible:"You cannot borrow right now", maxloan:"Maximum", requestloan:"Request a loan", principal:"Amount to borrow", term:"Repay within", months:"months", purpose:"What is it for?", youllrepay:"You will repay", interest:"interest",
+    myloans:"My loans", repay:"Record a repayment", due:"Due", outstanding:"Outstanding", requested:"Requested", approved:"Approved", disbursed:"Active", repaid:"Repaid", defaulted:"Defaulted", cancelled:"Cancelled",
+    decide:"Loan requests", approve:"Approve", disburse:"Mark as paid out", repayments:"Repayments to confirm", allloans:"All loans",
+    open:"Open", passed:"Passed", failed:"Failed", withdrawn:"Withdrawn", yes:"Yes", no:"No", abstain:"Abstain", voted:"You voted", closes:"Voting closes", needed:"needed to pass", close:"Close & count votes", newproposal:"New proposal", title:"Title", description:"Details", proposalkind:"Kind", investment:"Investment", settings_change:"Rule change", expense:"Expense", member_change:"Membership", other:"Other", openvote:"Open for voting", past:"Past proposals", votes:"votes",
+    memberslist:"Members", addmember:"Add a member", fullname:"Full name", phone:"Phone", language:"Language", add:"Add member", roles:"Roles", assignrole:"Assign a role", role:"Role", chairperson:"Chairperson", treasurer:"Treasurer", secretary:"Secretary", investment_lead:"Investment lead", until:"until", noaccount:"Not signed up yet", active:"Active", suspended:"Suspended", exited:"Left", resetpin:"Reset a member's PIN", reset:"Reset PIN",
+    rules:"Fund rules", proposechange:"Propose a rule change", effective:"In force since", currentval:"Now", newval:"Proposed", investments:"Investments", addinvestment:"Add an investment", valuation:"Latest value", addvaluation:"Update value", name:"Name", type:"Type", institution:"Institution", value:"Value", ason:"As of",
+    fixed_deposit:"Fixed deposit", treasury:"Treasury bills/bonds", unit_trust:"Unit trust", business:"Business", land:"Land", stocks:"Shares", proposed:"Proposed", exited_inv:"Exited",
+    notlisted:"That username is not on the member list. Ask an officer to add you first.", alreadysetup:"This username already has a PIN. Sign in instead, or ask an officer to reset it.", account:"My account", changepin:"Change my PIN", signout:"Sign out", saved:"Saved", done:"Done", error:"Something went wrong", cancel:"Cancel", loading:"Loading…", wrongpin:"Wrong username or PIN", of:"of",
+    s_initial_deposit:"Initial deposit", s_monthly_contribution:"Monthly contribution", s_deposit_day:"Deposit day of month", s_grace_days:"Grace days", s_late_fine:"Late fine", s_missed_months_before_suspension:"Missed months before suspension",
+    s_loan_multiplier:"Loan limit (× your shares)", s_loan_interest_rate_pct:"Loan interest % per month", s_loan_interest_method:"Interest method", s_loan_min_term_months:"Min loan term (months)", s_loan_max_term_months:"Max loan term (months)", s_loan_lockout_months:"No loans for first (months)",
+    s_emergency_withdrawal_pct:"Emergency withdrawal (% of shares)", s_emergency_repayment_months:"Emergency repayment (months)", s_vote_threshold_pct:"Votes needed to pass (%)", s_vote_window_days:"Voting window (days)", s_large_investment_threshold:"Chair sign-off above", s_officer_term_months:"Officer term (months)",
+    s_invest_start_balance:"Start investing at fund size", s_invest_pool_min_pct:"Invest at least (% of fund)", s_invest_pool_max_pct:"Invest at most (% of fund)", s_max_single_venture_pct:"Max in one venture (%)", s_target_amount:"Target amount", s_target_date:"Target date",
+    flat_per_month:"Flat, per month", flat_once:"Flat, once", nochange:"Leave blank to keep the current value.",
+  },
+  sw: {
+    signin:"Ingia", first:"Mara ya kwanza? Weka PIN yako", back:"Rudi kuingia", username:"Jina la mtumiaji", pin:"PIN (tarakimu 6)", newpin:"Chagua PIN ya tarakimu 6", confirmpin:"Rudia PIN",
+    create:"Fungua akaunti yangu", pinmismatch:"PIN hazifanani", pinformat:"PIN lazima iwe tarakimu 6", welcome:"Karibu kwenye mfuko wa familia", tagline:"Tuweke pamoja. Tukue pamoja.",
+    home:"Nyumbani", money:"Michango", loans:"Mikopo", vote:"Kura", more:"Zaidi",
+    thismonth:"Mwezi huu", paid:"Umelipa", pending:"Inasubiri uthibitisho", notyet:"Bado hujalipa", partial:"Umelipa sehemu", dueby:"Tarehe ya mwisho", late:"Umechelewa — faini inaweza kutumika",
+    fundvalue:"Thamani ya mfuko", target:"Lengo", cash:"Fedha taslimu", onloan:"Kwenye mikopo", invested:"Imewekezwa", members:"Wanachama", progress:"ya safari",
+    yourshares:"Hisa zako", canborrow:"Unaweza kukopa hadi", needsyou:"Inahitaji umakini wako", toconfirm:"michango ya kuthibitisha", loanreqs:"maombi ya mikopo", openvotes:"kura zilizo wazi", allgood:"Hakuna kinachokusubiri.",
+    submitdeposit:"Wasilisha mchango", recorddeposit:"Rekodi mchango wa mwanachama", kind:"Aina", monthly:"Mchango wa mwezi", initial:"Mchango wa kwanza", extra:"Akiba ya ziada", fine:"Malipo ya faini", emergency_repayment:"Rejesho la dharura",
+    formonth:"Kwa mwezi", amount:"Kiasi", paidon:"Tarehe ya kulipa", channel:"Umelipa kupitia", reference:"Kumbukumbu ya muamala", proof:"Picha ya muamala (hiari)", note:"Maelezo", submit:"Wasilisha", record:"Rekodi kama imethibitishwa", member:"Mwanachama",
+    myhistory:"Michango yangu", awaiting:"Inasubiri uthibitisho", whopaid:"Nani amelipa mwezi huu", confirm:"Thibitisha", reject:"Kataa", rejectreason:"Sababu ya kukataa",
+    submitted:"Imewasilishwa", confirmed:"Imethibitishwa", rejected:"Imekataliwa", by:"na", nothing:"Hakuna kitu bado.",
+    eligibility:"Kukopa", eligible:"Unaweza kuomba mkopo", noteligible:"Huwezi kukopa kwa sasa", maxloan:"Kiwango cha juu", requestloan:"Omba mkopo", principal:"Kiasi cha kukopa", term:"Rudisha ndani ya", months:"miezi", purpose:"Ni kwa ajili ya nini?", youllrepay:"Utarudisha", interest:"riba",
+    myloans:"Mikopo yangu", repay:"Rekodi marejesho", due:"Tarehe ya mwisho", outstanding:"Bado inadaiwa", requested:"Imeombwa", approved:"Imeidhinishwa", disbursed:"Inaendelea", repaid:"Imelipwa", defaulted:"Haijalipwa", cancelled:"Imefutwa",
+    decide:"Maombi ya mikopo", approve:"Idhinisha", disburse:"Weka alama imetolewa", repayments:"Marejesho ya kuthibitisha", allloans:"Mikopo yote",
+    open:"Wazi", passed:"Imepita", failed:"Imekataliwa", withdrawn:"Imeondolewa", yes:"Ndiyo", no:"Hapana", abstain:"Sipigi", voted:"Umepiga kura", closes:"Kura inafungwa", needed:"zinahitajika kupita", close:"Funga na hesabu kura", newproposal:"Pendekezo jipya", title:"Kichwa", description:"Maelezo", proposalkind:"Aina", investment:"Uwekezaji", settings_change:"Badiliko la kanuni", expense:"Matumizi", member_change:"Uanachama", other:"Nyingine", openvote:"Fungua kwa kura", past:"Mapendekezo yaliyopita", votes:"kura",
+    memberslist:"Wanachama", addmember:"Ongeza mwanachama", fullname:"Jina kamili", phone:"Simu", language:"Lugha", add:"Ongeza", roles:"Nafasi", assignrole:"Toa nafasi", role:"Nafasi", chairperson:"Mwenyekiti", treasurer:"Mtunza Hazina", secretary:"Katibu", investment_lead:"Kiongozi wa Uwekezaji", until:"hadi", noaccount:"Hajajisajili", active:"Hai", suspended:"Amesimamishwa", exited:"Ameondoka", resetpin:"Weka upya PIN ya mwanachama", reset:"Weka upya PIN",
+    rules:"Kanuni za mfuko", proposechange:"Pendekeza badiliko la kanuni", effective:"Zinatumika tangu", currentval:"Sasa", newval:"Inayopendekezwa", investments:"Uwekezaji", addinvestment:"Ongeza uwekezaji", valuation:"Thamani ya sasa", addvaluation:"Sasisha thamani", name:"Jina", type:"Aina", institution:"Taasisi", value:"Thamani", ason:"Kufikia",
+    fixed_deposit:"Akiba ya muda maalum", treasury:"Hatifungani za serikali", unit_trust:"Mfuko wa uwekezaji", business:"Biashara", land:"Ardhi", stocks:"Hisa", proposed:"Imependekezwa", exited_inv:"Imetoka",
+    notlisted:"Jina hilo halipo kwenye orodha ya wanachama. Omba kiongozi akuongeze kwanza.", alreadysetup:"Jina hili tayari lina PIN. Ingia, au omba kiongozi aiweke upya.", account:"Akaunti yangu", changepin:"Badilisha PIN yangu", signout:"Toka", saved:"Imehifadhiwa", done:"Imekamilika", error:"Kuna hitilafu", cancel:"Ghairi", loading:"Inapakia…", wrongpin:"Jina au PIN si sahihi", of:"kati ya",
+    s_initial_deposit:"Mchango wa kwanza", s_monthly_contribution:"Mchango wa kila mwezi", s_deposit_day:"Tarehe ya mchango", s_grace_days:"Siku za nafasi", s_late_fine:"Faini ya kuchelewa", s_missed_months_before_suspension:"Miezi ya kukosa kabla ya kusimamishwa",
+    s_loan_multiplier:"Kikomo cha mkopo (× hisa zako)", s_loan_interest_rate_pct:"Riba ya mkopo % kwa mwezi", s_loan_interest_method:"Njia ya riba", s_loan_min_term_months:"Muda mfupi wa mkopo (miezi)", s_loan_max_term_months:"Muda mrefu wa mkopo (miezi)", s_loan_lockout_months:"Hakuna mikopo miezi ya kwanza",
+    s_emergency_withdrawal_pct:"Kutoa dharura (% ya hisa)", s_emergency_repayment_months:"Kurudisha dharura (miezi)", s_vote_threshold_pct:"Kura zinazohitajika kupita (%)", s_vote_window_days:"Muda wa kupiga kura (siku)", s_large_investment_threshold:"Saini ya Mwenyekiti zaidi ya", s_officer_term_months:"Muda wa viongozi (miezi)",
+    s_invest_start_balance:"Anza kuwekeza mfuko ukifikia", s_invest_pool_min_pct:"Wekeza angalau (% ya mfuko)", s_invest_pool_max_pct:"Wekeza zaidi (% ya mfuko)", s_max_single_venture_pct:"Kiwango cha juu kwenye shughuli moja (%)", s_target_amount:"Lengo", s_target_date:"Tarehe ya lengo",
+    flat_per_month:"Riba ya kudumu, kwa mwezi", flat_once:"Riba ya kudumu, mara moja", nochange:"Acha wazi kubaki na thamani ya sasa.",
+  }
+};
+let lang = localStorage.getItem("lang") || "sw";
+const t = k => (STR[lang][k] ?? STR.en[k] ?? k);
+
+// ---------------------------------------------------------------- state
+const S = { session:null, me:null, roles:[], settings:null, tab:"home", sub:{}, cache:{} };
+const has = r => S.roles.includes(r);
+const isOfficer = () => S.roles.length > 0;
+
+// ---------------------------------------------------------------- utils
+const $ = sel => document.querySelector(sel);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = n => (S.settings?.currency || "TZS") + " " + Number(n||0).toLocaleString("en-US",{maximumFractionDigits:0});
+const fmtDate = d => d ? new Date(d).toLocaleDateString(lang==="sw"?"sw-TZ":"en-GB",{day:"numeric",month:"short",year:"numeric"}) : "";
+const fmtMonth = d => d ? new Date(d).toLocaleDateString(lang==="sw"?"sw-TZ":"en-GB",{month:"long",year:"numeric"}) : "";
+const monthStart = (d=new Date()) => new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0,10);
+const today = () => new Date().toISOString().slice(0,10);
+let toastTimer;
+function toast(msg, err=false){ const el=$("#toast"); el.textContent=msg; el.className="toast show"+(err?" err":""); clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.className="toast",2600); }
+function fail(e){ console.error(e); toast(e?.message || e?.error_description || t("error"), true); }
+function pillFor(status){ const m={confirmed:"ok",paid:"ok",passed:"ok",active:"ok",repaid:"ok",disbursed:"ok",approved:"ok",submitted:"wait",requested:"wait",open:"wait",pending:"wait",partial:"wait",rejected:"bad",failed:"bad",missing:"bad",defaulted:"bad",suspended:"bad"}; return `<span class="pill ${m[status]||""}">${esc(t(status))}</span>`; }
+function form(el){ const o={}; new FormData(el).forEach((v,k)=>o[k]=v); return o; }
+async function busy(btn, fn){ btn.disabled=true; try{ await fn(); } catch(e){ fail(e);} finally{ btn.disabled=false; } }
+function memberName(id){ const m=(S.cache.members||[]).find(x=>x.id===id); return m? m.full_name : "—"; }
+
+// ---------------------------------------------------------------- data
+async function loadContext(){
+  const { data:{ session } } = await sb.auth.getSession();
+  S.session = session; if(!session) return;
+  const [{data:me},{data:st}] = await Promise.all([
+    sb.from("members").select("*").eq("user_id", session.user.id).maybeSingle(),
+    sb.rpc("current_settings")
+  ]);
+  S.me = me; S.settings = Array.isArray(st)? st[0] : st;
+  if(me){
+    const {data:roles} = await sb.from("role_assignments").select("role").eq("member_id", me.id).lte("term_start", today()).gte("term_end", today());
+    S.roles = (roles||[]).map(r=>r.role);
+    if(me.language && me.language!==lang){ lang=me.language; localStorage.setItem("lang",lang); }
+  }
+}
+async function loadMembers(){ const {data,error}=await sb.from("members").select("*").order("full_name"); if(error) throw error; S.cache.members=data; return data; }
+
+// ---------------------------------------------------------------- render root
+async function render(){
+  const app=$("#app");
+  if(!S.session){ app.innerHTML=authView(); bindAuth(); return; }
+  if(!S.me){ app.innerHTML=`<div class="center"><h1>${esc(t("welcome"))}</h1><p class="muted" style="margin-top:8px">Your account is not linked to a member. Ask an officer to add your username.</p><button class="btn quiet" style="margin-top:16px" id="so">${esc(t("signout"))}</button></div>`; $("#so").onclick=signOut; return; }
+  app.innerHTML=`<div class="topbar"><div class="brand">Bwana Family Fund</div><button class="lang" id="lang">${lang==="sw"?"English":"Kiswahili"}</button></div><div id="view"><div class="spinner">${esc(t("loading"))}</div></div>`+navView();
+  $("#lang").onclick=async()=>{ lang=lang==="sw"?"en":"sw"; localStorage.setItem("lang",lang); if(S.me) await sb.from("members").update({language:lang}).eq("id",S.me.id); render(); };
+  document.querySelectorAll(".nav button").forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab; render();});
+  try{ await ({home:homeView,money:moneyView,loans:loansView,vote:voteView,more:moreView}[S.tab])($("#view")); } catch(e){ fail(e); }
+}
+function navView(){
+  const ic={home:'<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',money:'<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/>',loans:'<path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',vote:'<path d="M9 12l2 2 4-4"/><path d="M4 4h16v13H4z"/><path d="M2 21h20"/>',more:'<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>'};
+  return `<nav class="nav"><div class="in">${["home","money","loans","vote","more"].map(k=>`<button data-tab="${k}" class="${S.tab===k?"on":""}"><svg viewBox="0 0 24 24">${ic[k]}</svg>${esc(t(k))}</button>`).join("")}</div></nav>`;
+}
+
+// ---------------------------------------------------------------- auth
+function authView(){
+  const first = S.sub.first;
+  return `<div class="center">
+    <div class="logo"><svg viewBox="0 0 24 24"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg></div>
+    <h1>${esc(t("welcome"))}</h1><p class="muted" style="margin:6px 0 18px">${esc(t("tagline"))}</p>
+    <form id="authf" autocomplete="off">
+      <label class="f"><span>${esc(t("username"))}</span><input name="username" required pattern="[a-z0-9_]{3,20}" autocapitalize="none" spellcheck="false" inputmode="text"></label>
+      <label class="f"><span>${esc(first?t("newpin"):t("pin"))}</span><input name="pin" type="password" inputmode="numeric" pattern="\\d{6}" maxlength="6" required></label>
+      ${first?`<label class="f"><span>${esc(t("confirmpin"))}</span><input name="pin2" type="password" inputmode="numeric" pattern="\\d{6}" maxlength="6" required></label>`:""}
+      <button class="btn full" style="margin-top:18px" type="submit">${esc(first?t("create"):t("signin"))}</button>
+    </form>
+    <div style="display:flex;justify-content:space-between;margin-top:16px;align-items:center">
+      <button class="btn ghost sm" id="toggle">${esc(first?t("back"):t("first"))}</button>
+      <button class="lang" id="lang0">${lang==="sw"?"English":"Kiswahili"}</button>
+    </div></div>`;
+}
+function bindAuth(){
+  $("#toggle").onclick=()=>{S.sub.first=!S.sub.first; render();};
+  $("#lang0").onclick=()=>{lang=lang==="sw"?"en":"sw"; localStorage.setItem("lang",lang); render();};
+  $("#authf").onsubmit=async e=>{
+    e.preventDefault(); const f=form(e.target); const btn=e.target.querySelector("button");
+    const email=f.username.toLowerCase().trim()+"@"+AUTH_DOMAIN;
+    if(!/^\d{6}$/.test(f.pin)) return toast(t("pinformat"),true);
+    await busy(btn, async()=>{
+      if(S.sub.first){
+        if(f.pin!==f.pin2) throw new Error(t("pinmismatch"));
+        const {error}=await sb.auth.signUp({email,password:f.pin});
+        if(error) throw new Error(/database error/i.test(error.message)? t("notlisted") : /already registered/i.test(error.message)? t("alreadysetup") : error.message);
+        S.sub.first=false;
+      } else {
+        const {error}=await sb.auth.signInWithPassword({email,password:f.pin});
+        if(error) throw new Error(/invalid/i.test(error.message)? t("wrongpin") : error.message);
+      }
+      await loadContext(); render();
+    });
+  };
+}
+async function signOut(){ await sb.auth.signOut(); S.session=null; S.me=null; S.roles=[]; render(); }
+
+// ---------------------------------------------------------------- home
+async function homeView(el){
+  const st=S.settings; const period=monthStart();
+  const [{data:fs},{data:mm},{data:bal},{data:pendingC},{data:loanReqs},{data:openP},{data:mine}]=await Promise.all([
+    sb.from("fund_summary").select("*").single(),
+    sb.from("member_month_status").select("*").eq("member_id",S.me.id).eq("period",period).maybeSingle(),
+    sb.from("member_balances").select("*").eq("member_id",S.me.id).single(),
+    has("treasurer")? sb.from("contributions").select("id",{count:"exact",head:true}).eq("status","submitted") : Promise.resolve({data:null,count:0}),
+    (has("treasurer")||has("chairperson"))? sb.from("loans").select("id",{count:"exact",head:true}).eq("status","requested") : Promise.resolve({count:0}),
+    sb.from("proposals").select("id",{count:"exact",head:true}).eq("status","open"),
+    sb.from("contributions").select("status").eq("member_id",S.me.id).eq("period",period).eq("kind","monthly").eq("status","submitted")
+  ].map(p=>p.then(r=>r, e=>({data:null,count:0,error:e}))));
+  const paidState = mm?.status==="paid" ? "ok" : (mine?.length? "wait" : (mm?.status==="partial"?"wait":"bad"));
+  const stateText = mm?.status==="paid" ? t("paid") : (mine?.length? t("pending") : (mm?.status==="partial"? t("partial") : t("notyet")));
+  const isLate = mm && mm.status!=="paid" && !mine?.length && new Date(mm.due_on) < new Date(today());
+  const pct = fs? Math.min(100, (Number(fs.fund_value)/Number(fs.target_amount))*100) : 0;
+  const tasks=[];
+  if(has("treasurer") && pendingC?.count) tasks.push(`${pendingC.count} ${t("toconfirm")}`);
+  if((has("treasurer")||has("chairperson")) && loanReqs?.count) tasks.push(`${loanReqs.count} ${t("loanreqs")}`);
+  if(openP?.count) tasks.push(`${openP.count} ${t("openvotes")}`);
+  el.innerHTML=`
+  <div class="sheet"><div class="hero">
+    <p class="muted">${esc(t("thismonth"))} · ${esc(fmtMonth(period))}</p>
+    <div class="big num">${money(mm?.expected ?? st.monthly_contribution)}</div>
+    <p class="status ${paidState}" style="margin-top:8px">${esc(stateText)}</p>
+    <p class="small muted" style="margin-top:4px">${esc(t("dueby"))} ${esc(fmtDate(mm?.due_on))}${isLate?` · <span style="color:var(--danger)">${esc(t("late"))}</span>`:""}</p>
+    ${paidState==="bad"?`<button class="btn full" style="margin-top:14px" id="goPay">${esc(t("submitdeposit"))}</button>`:""}
+  </div></div>
+  <div class="sheet"><div class="row">
+    <div class="row head" style="padding:0"><h2>${esc(t("fundvalue"))}</h2><span class="num amt">${money(fs?.fund_value)}</span></div>
+    <div class="bar"><i style="width:${pct.toFixed(1)}%"></i></div>
+    <p class="small muted num">${pct.toFixed(1)}% ${esc(t("progress"))} · ${esc(t("target"))} ${money(fs?.target_amount)}${fs?.target_date?` · ${esc(fmtDate(fs.target_date))}`:""}</p>
+  </div>
+  <div class="row grid2" style="border-top:0;padding-top:0">
+    <div class="kv"><p class="small muted">${esc(t("cash"))}</p><p class="v num">${money(fs?.cash_on_hand)}</p></div>
+    <div class="kv"><p class="small muted">${esc(t("onloan"))}</p><p class="v num">${money(fs?.loans_outstanding)}</p></div>
+    <div class="kv"><p class="small muted">${esc(t("invested"))}</p><p class="v num">${money(fs?.invested_value)}</p></div>
+    <div class="kv"><p class="small muted">${esc(t("members"))}</p><p class="v num">${fs?.active_members ?? 0}</p></div>
+  </div></div>
+  <div class="sheet">
+    <div class="row between"><span>${esc(t("yourshares"))}</span><span class="amt num">${money(bal?.total_shares)}</span></div>
+    <div class="row between"><span>${esc(t("canborrow"))}</span><span class="amt num">${money(bal?.available_to_borrow)}</span></div>
+  </div>
+  <div class="sheet"><div class="row"><h3>${esc(t("needsyou"))}</h3></div>
+    ${tasks.length? tasks.map(x=>`<div class="row">${esc(x)}</div>`).join("") : `<div class="row muted">${esc(t("allgood"))}</div>`}
+  </div>`;
+  const gp=$("#goPay"); if(gp) gp.onclick=()=>{S.tab="money"; render();};
+}
+
+// ---------------------------------------------------------------- deposits
+function depositForm({officer}){
+  const st=S.settings; const kinds=["monthly","initial","extra","fine","emergency_repayment"];
+  const members=S.cache.members||[];
+  return `<form id="${officer?"recf":"subf"}">
+    ${officer?`<label class="f"><span>${esc(t("member"))}</span><select name="member_id" required>${members.filter(m=>m.status!=="exited").map(m=>`<option value="${m.id}">${esc(m.full_name)}</option>`).join("")}</select></label>`:""}
+    <label class="f"><span>${esc(t("kind"))}</span><select name="kind" id="kind_${officer?1:0}">${kinds.map(k=>`<option value="${k}">${esc(t(k))}</option>`).join("")}</select></label>
+    <label class="f"><span>${esc(t("formonth"))}</span><input name="period" type="month" value="${monthStart().slice(0,7)}"></label>
+    <label class="f"><span>${esc(t("amount"))}</span><input name="amount" type="number" inputmode="numeric" min="1" step="1" value="${Number(st.monthly_contribution)}" required></label>
+    <label class="f"><span>${esc(t("paidon"))}</span><input name="paid_on" type="date" value="${today()}" required></label>
+    <label class="f"><span>${esc(t("channel"))}</span><select name="channel"><option value="mpesa">M-Pesa</option><option value="tigo_pesa">Tigo Pesa</option><option value="airtel_money">Airtel Money</option><option value="halopesa">HaloPesa</option><option value="bank">Bank</option><option value="cash">Cash</option><option value="other">Other</option></select></label>
+    <label class="f"><span>${esc(t("reference"))}</span><input name="reference" placeholder="e.g. ABC12XYZ"></label>
+    <label class="f"><span>${esc(t("proof"))}</span><input name="proof" type="file" accept="image/*"></label>
+    <label class="f"><span>${esc(t("note"))}</span><input name="note"></label>
+    <button class="btn full" style="margin-top:16px" type="submit">${esc(officer?t("record"):t("submit"))}</button></form>`;
+}
+function bindDepositForm(id, officer){
+  const f=document.getElementById(id); if(!f) return;
+  const st=S.settings; const kindSel=f.querySelector("select[name=kind]"); const amt=f.querySelector("input[name=amount]");
+  kindSel.onchange=()=>{ const k=kindSel.value; amt.value = k==="monthly"? Number(st.monthly_contribution) : k==="initial"? Number(st.initial_deposit) : k==="fine"? Number(st.late_fine) : ""; };
+  f.onsubmit=async e=>{ e.preventDefault(); const d=form(f); const btn=f.querySelector("button[type=submit]");
+    await busy(btn, async()=>{
+      let proof_url=null; const file=f.querySelector("input[name=proof]").files[0];
+      if(file){ const path=`${S.session.user.id}/${Date.now()}_${file.name.replace(/[^\w.\-]/g,"_")}`; const {error}=await sb.storage.from("proofs").upload(path,file); if(error) throw error; proof_url=path; }
+      const row={ member_id: officer? d.member_id : S.me.id, kind:d.kind, period: d.period? d.period+"-01" : null, amount:Number(d.amount), paid_on:d.paid_on, channel:d.channel, reference:d.reference||null, note:d.note||null, proof_url, submitted_by:S.me.id, status: officer?"confirmed":"submitted", confirmed_by: officer? S.me.id : null, confirmed_at: officer? new Date().toISOString(): null };
+      if(["initial","extra"].includes(d.kind)) row.period=null;
+      const {error}=await sb.from("contributions").insert(row); if(error) throw error;
+      toast(t("saved")); render();
+    }); };
+}
+async function moneyView(el){
+  await loadMembers();
+  const sub=S.sub.money||"mine"; const tabs=[["mine",t("myhistory")],["submit",t("submitdeposit")],["month",t("whopaid")]];
+  if(has("treasurer")) tabs.push(["review",t("awaiting")],["record",t("recorddeposit")]);
+  let body="";
+  if(sub==="mine"){
+    const {data}=await sb.from("contributions").select("*").eq("member_id",S.me.id).order("paid_on",{ascending:false}).limit(60);
+    body = data?.length? `<div class="sheet list">${data.map(c=>`<div class="row"><div class="l"><p class="name">${esc(t(c.kind))}${c.period?` · ${esc(fmtMonth(c.period))}`:""}</p><p class="small muted">${esc(fmtDate(c.paid_on))}${c.reference?` · ${esc(c.reference)}`:""}${c.rejection_reason?` · ${esc(c.rejection_reason)}`:""}</p></div><div class="r"><p class="amt num">${money(c.amount)}</p>${pillFor(c.status)}</div></div>`).join("")}</div>` : `<div class="sheet"><div class="empty">${esc(t("nothing"))}</div></div>`;
+  } else if(sub==="submit"){ body=`<div class="sheet"><div class="row">${depositForm({officer:false})}</div></div>`; }
+  else if(sub==="record"){ body=`<div class="sheet"><div class="row">${depositForm({officer:true})}</div></div>`; }
+  else if(sub==="month"){
+    const {data}=await sb.from("member_month_status").select("*").eq("period",monthStart());
+    body=`<div class="sheet"><div class="row head"><h3>${esc(fmtMonth(monthStart()))}</h3><span class="small muted num">${(data||[]).filter(x=>x.status==="paid").length} ${esc(t("of"))} ${(data||[]).length}</span></div><div class="month-grid">${(data||[]).map(x=>`<div class="${x.status}">${esc(memberName(x.member_id))}<br><span class="small">${esc(t(x.status==="missing"?"notyet":x.status))}</span></div>`).join("")}</div></div>`;
+  } else if(sub==="review"){
+    const {data}=await sb.from("contributions").select("*").eq("status","submitted").order("created_at");
+    body = data?.length? `<div class="sheet list">${data.map(c=>`<div class="row" style="flex-direction:column"><div style="display:flex;justify-content:space-between;width:100%"><div class="l"><p class="name">${esc(memberName(c.member_id))}</p><p class="small muted">${esc(t(c.kind))}${c.period?` · ${esc(fmtMonth(c.period))}`:""} · ${esc(fmtDate(c.paid_on))} · ${esc(c.channel||"")} ${esc(c.reference||"")}</p></div><p class="amt num">${money(c.amount)}</p></div>
+      <div class="btnrow" style="margin-top:10px">${c.proof_url?`<button class="btn quiet sm" data-proof="${esc(c.proof_url)}">${esc(t("proof")).replace(/\s*\(.*\)/,"")}</button>`:""}<button class="btn sm" data-ok="${c.id}">${esc(t("confirm"))}</button><button class="btn quiet sm" data-no="${c.id}">${esc(t("reject"))}</button></div></div>`).join("")}</div>` : `<div class="sheet"><div class="empty">${esc(t("nothing"))}</div></div>`;
+  }
+  el.innerHTML=`<div class="tabs">${tabs.map(([k,l])=>`<button data-s="${k}" class="${sub===k?"on":""}">${esc(l)}</button>`).join("")}</div>${body}`;
+  el.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{S.sub.money=b.dataset.s; render();});
+  bindDepositForm("subf",false); bindDepositForm("recf",true);
+  el.querySelectorAll("[data-ok]").forEach(b=>b.onclick=()=>busy(b,async()=>{const {error}=await sb.rpc("review_contribution",{p_id:b.dataset.ok,p_approve:true}); if(error) throw error; toast(t("confirmed")); render();}));
+  el.querySelectorAll("[data-no]").forEach(b=>b.onclick=()=>{const r=prompt(t("rejectreason")); if(r===null) return; busy(b,async()=>{const {error}=await sb.rpc("review_contribution",{p_id:b.dataset.no,p_approve:false,p_reason:r}); if(error) throw error; toast(t("rejected")); render();});});
+  el.querySelectorAll("[data-proof]").forEach(b=>b.onclick=()=>busy(b,async()=>{const {data,error}=await sb.storage.from("proofs").createSignedUrl(b.dataset.proof,300); if(error) throw error; window.open(data.signedUrl,"_blank");}));
+}
+
+// ---------------------------------------------------------------- loans
+async function loansView(el){
+  await loadMembers(); const st=S.settings;
+  const sub=S.sub.loans||"mine"; const tabs=[["mine",t("myloans")],["all",t("allloans")]];
+  if(has("treasurer")||has("chairperson")) tabs.push(["decide",t("decide")]);
+  if(has("treasurer")) tabs.push(["repayments",t("repayments")]);
+  let body="";
+  const loanCard=(l, actions="")=>{ const paid=(l.loan_repayments||[]).filter(r=>r.status==="confirmed").reduce((a,r)=>a+Number(r.amount),0);
+    return `<div class="row" style="flex-direction:column"><div style="display:flex;justify-content:space-between;width:100%"><div class="l"><p class="name">${esc(memberName(l.member_id))}</p><p class="small muted">${esc(l.purpose||"")}${l.due_on?` · ${esc(t("due"))} ${esc(fmtDate(l.due_on))}`:""}</p><p class="small muted num">${money(l.principal)} + ${money(l.interest_amount)} ${esc(t("interest"))} = ${money(l.total_due)}${l.status==="disbursed"?` · ${esc(t("outstanding"))} ${money(Number(l.total_due)-paid)}`:""}</p></div><div class="r">${pillFor(l.status)}</div></div>${actions}</div>`; };
+  if(sub==="mine"){
+    const [{data:elig},{data:loans}]=await Promise.all([sb.rpc("loan_eligibility"), sb.from("loans").select("*, loan_repayments(*)").eq("member_id",S.me.id).order("created_at",{ascending:false})]);
+    const e=Array.isArray(elig)?elig[0]:elig;
+    const activeLoan=(loans||[]).find(l=>l.status==="disbursed");
+    body=`<div class="sheet"><div class="row"><h3>${esc(t("eligibility"))}</h3>
+      <p class="status ${e?.eligible?"ok":"bad"}" style="margin-top:6px">${esc(e?.eligible?t("eligible"):t("noteligible"))}</p>
+      ${e?.eligible?`<p class="small muted num">${esc(t("maxloan"))}: ${money(e.max_loan)}</p>`:`<ul class="small muted" style="margin:6px 0 0 18px;padding:0">${(e?.reasons||[]).map(r=>`<li>${esc(r)}</li>`).join("")}</ul>`}
+      ${e?.eligible?`<details style="margin-top:8px"><summary style="padding:8px 0">${esc(t("requestloan"))}</summary><div class="body" style="padding:0"><form id="loanf">
+        <label class="f"><span>${esc(t("principal"))}</span><input name="principal" type="number" inputmode="numeric" min="1" max="${Number(e.max_loan)}" step="1" required></label>
+        <label class="f"><span>${esc(t("term"))}</span><select name="term">${Array.from({length:st.loan_max_term_months-st.loan_min_term_months+1},(_,i)=>i+Number(st.loan_min_term_months)).map(m=>`<option value="${m}">${m} ${esc(t("months"))}</option>`).join("")}</select></label>
+        <label class="f"><span>${esc(t("purpose"))}</span><input name="purpose"></label>
+        <p class="hint num" id="repayHint"></p>
+        <button class="btn full" style="margin-top:14px" type="submit">${esc(t("requestloan"))}</button></form></div></details>`:""}
+    </div></div>
+    ${activeLoan?`<div class="sheet"><div class="row"><h3>${esc(t("repay"))}</h3><form id="repf">
+      <label class="f"><span>${esc(t("amount"))}</span><input name="amount" type="number" inputmode="numeric" min="1" step="1" required></label>
+      <label class="f"><span>${esc(t("paidon"))}</span><input name="paid_on" type="date" value="${today()}" required></label>
+      <label class="f"><span>${esc(t("reference"))}</span><input name="reference"></label>
+      <button class="btn full" style="margin-top:14px" type="submit">${esc(t("submit"))}</button></form></div></div>`:""}
+    <div class="sheet list">${loans?.length? loans.map(l=>loanCard(l)).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>`;
+  } else if(sub==="all"){
+    const {data}=await sb.from("loans").select("*, loan_repayments(*)").order("created_at",{ascending:false}).limit(100);
+    body=`<div class="sheet list">${data?.length? data.map(l=>loanCard(l)).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>`;
+  } else if(sub==="decide"){
+    const {data}=await sb.from("loans").select("*, loan_repayments(*)").in("status",["requested","approved"]).order("created_at");
+    body=`<div class="sheet list">${data?.length? data.map(l=>loanCard(l, `<div class="btnrow" style="margin-top:10px">${l.status==="requested"?`<button class="btn sm" data-approve="${l.id}">${esc(t("approve"))}</button><button class="btn quiet sm" data-rejectl="${l.id}">${esc(t("reject"))}</button>`:""}${l.status==="approved"&&has("treasurer")?`<button class="btn sm" data-disburse="${l.id}">${esc(t("disburse"))}</button>`:""}</div>`)).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>`;
+  } else if(sub==="repayments"){
+    const {data}=await sb.from("loan_repayments").select("*, loans(member_id, total_due)").eq("status","submitted").order("created_at");
+    body=`<div class="sheet list">${data?.length? data.map(r=>`<div class="row"><div class="l"><p class="name">${esc(memberName(r.loans?.member_id))}</p><p class="small muted">${esc(fmtDate(r.paid_on))} ${esc(r.reference||"")}</p></div><div class="r"><p class="amt num">${money(r.amount)}</p><div class="btnrow" style="justify-content:flex-end;margin-top:6px"><button class="btn sm" data-rok="${r.id}">${esc(t("confirm"))}</button><button class="btn quiet sm" data-rno="${r.id}">${esc(t("reject"))}</button></div></div></div>`).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>`;
+  }
+  el.innerHTML=`<div class="tabs">${tabs.map(([k,l])=>`<button data-s="${k}" class="${sub===k?"on":""}">${esc(l)}</button>`).join("")}</div>${body}`;
+  el.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{S.sub.loans=b.dataset.s; render();});
+  const lf=$("#loanf"); if(lf){ const upd=()=>{ const p=Number(lf.principal.value||0), m=Number(lf.term.value); const i = st.loan_interest_method==="flat_per_month"? p*st.loan_interest_rate_pct/100*m : p*st.loan_interest_rate_pct/100; $("#repayHint").textContent=`${t("youllrepay")} ${money(p+i)} (${money(i)} ${t("interest")})`; }; lf.oninput=upd; upd();
+    lf.onsubmit=e=>{e.preventDefault(); busy(lf.querySelector("button"),async()=>{const {error}=await sb.rpc("request_loan",{p_principal:Number(lf.principal.value),p_term_months:Number(lf.term.value),p_purpose:lf.purpose.value||null}); if(error) throw error; toast(t("requested")); render();});}; }
+  const rf=$("#repf"); if(rf){ rf.onsubmit=async e=>{e.preventDefault(); busy(rf.querySelector("button"),async()=>{ const {data:l}=await sb.from("loans").select("id").eq("member_id",S.me.id).eq("status","disbursed").single(); const {error}=await sb.from("loan_repayments").insert({loan_id:l.id,amount:Number(rf.amount.value),paid_on:rf.paid_on.value,reference:rf.reference.value||null,submitted_by:S.me.id,status:"submitted"}); if(error) throw error; toast(t("submitted")); render();});}; }
+  const rpc=(name,args,msg)=>b=>busy(b,async()=>{const {error}=await sb.rpc(name,args(b)); if(error) throw error; toast(msg); render();});
+  el.querySelectorAll("[data-approve]").forEach(b=>b.onclick=()=>rpc("decide_loan",b=>({p_loan:b.dataset.approve,p_approve:true}),t("approved"))(b));
+  el.querySelectorAll("[data-rejectl]").forEach(b=>b.onclick=()=>{const r=prompt(t("rejectreason")); if(r===null) return; rpc("decide_loan",b=>({p_loan:b.dataset.rejectl,p_approve:false,p_note:r}),t("rejected"))(b);});
+  el.querySelectorAll("[data-disburse]").forEach(b=>b.onclick=()=>rpc("disburse_loan",b=>({p_loan:b.dataset.disburse}),t("done"))(b));
+  el.querySelectorAll("[data-rok]").forEach(b=>b.onclick=()=>rpc("review_repayment",b=>({p_id:b.dataset.rok,p_approve:true}),t("confirmed"))(b));
+  el.querySelectorAll("[data-rno]").forEach(b=>b.onclick=()=>{const r=prompt(t("rejectreason")); if(r===null) return; rpc("review_repayment",b=>({p_id:b.dataset.rno,p_approve:false,p_reason:r}),t("rejected"))(b);});
+}
+
+// ---------------------------------------------------------------- vote
+const SETTING_FIELDS=["initial_deposit","monthly_contribution","deposit_day","grace_days","late_fine","missed_months_before_suspension","loan_multiplier","loan_interest_rate_pct","loan_interest_method","loan_min_term_months","loan_max_term_months","loan_lockout_months","emergency_withdrawal_pct","emergency_repayment_months","vote_threshold_pct","vote_window_days","large_investment_threshold","officer_term_months","invest_start_balance","invest_pool_min_pct","invest_pool_max_pct","max_single_venture_pct","target_amount","target_date"];
+const MONEY_FIELDS=["initial_deposit","monthly_contribution","late_fine","large_investment_threshold","invest_start_balance","target_amount"];
+function settingDisplay(k,v){ if(v==null||v==="") return "—"; if(k==="loan_interest_method") return t(v); if(k==="target_date") return fmtDate(v); if(MONEY_FIELDS.includes(k)) return money(v); return String(Number(v)); }
+async function voteView(el){
+  await loadMembers();
+  const sub=S.sub.vote||"open"; const tabs=[["open",t("open")],["new",t("newproposal")],["past",t("past")]];
+  let body="";
+  if(sub==="open"||sub==="past"){
+    const q=sb.from("proposals").select("*, votes(*)").order("created_at",{ascending:false});
+    const {data}= sub==="open"? await q.eq("status","open") : await q.neq("status","open").limit(50);
+    body = data?.length? data.map(p=>{ const yes=p.votes.filter(v=>v.choice==="yes").length, no=p.votes.filter(v=>v.choice==="no").length, needed=Math.ceil(p.eligible_voters*p.threshold_pct/100); const mine=p.votes.find(v=>v.member_id===S.me.id); const canClose=p.status==="open"&&(has("chairperson")||has("secretary")||new Date(p.closes_at)<=new Date());
+      const payloadRows = p.kind==="settings_change"&&p.payload? Object.entries(p.payload).map(([k,v])=>`<div class="row between small"><span>${esc(t("s_"+k))}</span><span class="num">${esc(settingDisplay(k,S.settings[k]))} → <b>${esc(settingDisplay(k,v))}</b></span></div>`).join("") : "";
+      return `<div class="sheet"><div class="row"><div class="row head" style="padding:0"><h3>${esc(p.title)}</h3>${pillFor(p.status)}</div><p class="small muted">${esc(t(p.kind))}${p.amount?` · ${money(p.amount)}`:""} · ${esc(memberName(p.proposed_by))}</p>${p.description?`<p class="small" style="margin-top:6px">${esc(p.description)}</p>`:""}</div>${payloadRows}
+      <div class="row"><p class="small num"><b>${yes}</b> ${esc(t("yes"))} · <b>${no}</b> ${esc(t("no"))} · ${needed} ${esc(t("needed"))} (${p.eligible_voters} ${esc(t("members")).toLowerCase()})</p>${p.status==="open"?`<p class="small muted">${esc(t("closes"))} ${esc(fmtDate(p.closes_at))}${mine?` · ${esc(t("voted"))}: ${esc(t(mine.choice))}`:""}</p>
+        <div class="btnrow" style="margin-top:10px">${["yes","no","abstain"].map(c=>`<button class="btn sm ${mine?.choice===c?"":"quiet"}" data-vote="${p.id}" data-choice="${c}">${esc(t(c))}</button>`).join("")}${canClose?`<button class="btn ghost sm" data-close="${p.id}">${esc(t("close"))}</button>`:""}</div>`:""}</div></div>`; }).join("") : `<div class="sheet"><div class="empty">${esc(t("nothing"))}</div></div>`;
+  } else {
+    body=`<div class="sheet"><div class="row"><form id="propf">
+      <label class="f"><span>${esc(t("proposalkind"))}</span><select name="kind" id="pkind">${["investment","expense","settings_change","member_change","other"].map(k=>`<option value="${k}">${esc(t(k))}</option>`).join("")}</select></label>
+      <label class="f"><span>${esc(t("title"))}</span><input name="title" required></label>
+      <label class="f"><span>${esc(t("description"))}</span><textarea name="description"></textarea></label>
+      <div id="amtWrap"><label class="f"><span>${esc(t("amount"))}</span><input name="amount" type="number" inputmode="numeric" min="0" step="1"></label></div>
+      <div id="setWrap" style="display:none"><p class="hint" style="margin-top:12px">${esc(t("nochange"))}</p>${SETTING_FIELDS.map(k=>`<label class="f"><span>${esc(t("s_"+k))} <span class="muted">(${esc(t("currentval"))}: ${esc(settingDisplay(k,S.settings[k]))})</span></span>${k==="loan_interest_method"?`<select name="s_${k}"><option value="">—</option><option value="flat_per_month">${esc(t("flat_per_month"))}</option><option value="flat_once">${esc(t("flat_once"))}</option></select>`:k==="target_date"?`<input name="s_${k}" type="date">`:`<input name="s_${k}" type="number" step="any" inputmode="decimal">`}</label>`).join("")}</div>
+      <button class="btn full" style="margin-top:16px" type="submit">${esc(t("openvote"))}</button></form></div></div>`;
+  }
+  el.innerHTML=`<div class="tabs">${tabs.map(([k,l])=>`<button data-s="${k}" class="${sub===k?"on":""}">${esc(l)}</button>`).join("")}</div>${body}`;
+  el.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{S.sub.vote=b.dataset.s; render();});
+  el.querySelectorAll("[data-vote]").forEach(b=>b.onclick=()=>busy(b,async()=>{const {error}=await sb.rpc("cast_vote",{p_proposal:b.dataset.vote,p_choice:b.dataset.choice}); if(error) throw error; toast(t("voted")); render();}));
+  el.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>busy(b,async()=>{const {data,error}=await sb.rpc("close_proposal",{p_proposal:b.dataset.close}); if(error) throw error; toast(t(data)); render();}));
+  const pf=$("#propf"); if(pf){ const sync=()=>{ const sc=pf.kind.value==="settings_change"; $("#setWrap").style.display=sc?"":"none"; $("#amtWrap").style.display=sc?"none":""; }; pf.kind.onchange=sync; sync();
+    pf.onsubmit=e=>{e.preventDefault(); busy(pf.querySelector("button"),async()=>{ const d=form(pf); let payload=null;
+      if(d.kind==="settings_change"){ payload={}; for(const k of SETTING_FIELDS){ const v=d["s_"+k]; if(v!=null && v!=="") payload[k]= (k==="loan_interest_method"||k==="target_date")? v : Number(v); } if(!Object.keys(payload).length) throw new Error(t("nochange")); }
+      const {error}=await sb.rpc("open_proposal",{p_kind:d.kind,p_title:d.title,p_description:d.description||null,p_amount:d.amount?Number(d.amount):null,p_payload:payload}); if(error) throw error; S.sub.vote="open"; toast(t("open")); render(); });}; }
+}
+
+// ---------------------------------------------------------------- more
+async function moreView(el){
+  await loadMembers(); const st=S.settings;
+  const sub=S.sub.more||"members"; const tabs=[["members",t("memberslist")],["rules",t("rules")],["invest",t("investments")],["account",t("account")]];
+  let body="";
+  if(sub==="members"){
+    const {data:roles}=await sb.from("role_assignments").select("*").lte("term_start",today()).gte("term_end",today());
+    const {data:bals}=await sb.from("member_balances").select("*");
+    body=`<div class="sheet list">${S.cache.members.map(m=>{ const rs=(roles||[]).filter(r=>r.member_id===m.id); const b=(bals||[]).find(x=>x.member_id===m.id);
+      return `<div class="row"><div class="l"><p class="name">${esc(m.full_name)} <span class="muted small">@${esc(m.username||"")}</span></p><p class="small muted">${rs.map(r=>esc(t(r.role))).join(", ")}${rs.length?" · ":""}${m.user_id?"":esc(t("noaccount"))+" · "}${esc(m.phone||"")}</p></div><div class="r"><p class="amt num">${money(b?.total_shares)}</p>${m.status!=="active"?pillFor(m.status):""}</div></div>`; }).join("")}</div>
+    ${isOfficer()?`<div class="sheet"><details><summary>${esc(t("addmember"))}</summary><div class="body"><form id="memf">
+      <label class="f"><span>${esc(t("fullname"))}</span><input name="full_name" required></label>
+      <label class="f"><span>${esc(t("username"))}</span><input name="username" required pattern="[a-z0-9_]{3,20}" autocapitalize="none"><p class="hint">a–z, 0–9, _ · 3–20</p></label>
+      <label class="f"><span>${esc(t("phone"))}</span><input name="phone" inputmode="tel"></label>
+      <label class="f"><span>${esc(t("language"))}</span><select name="language"><option value="sw">Kiswahili</option><option value="en">English</option></select></label>
+      <button class="btn full" style="margin-top:14px" type="submit">${esc(t("add"))}</button></form></div></details></div>`:""}
+    ${has("chairperson")?`<div class="sheet"><details><summary>${esc(t("assignrole"))}</summary><div class="body"><form id="rolef">
+      <label class="f"><span>${esc(t("member"))}</span><select name="member_id">${S.cache.members.filter(m=>m.status==="active").map(m=>`<option value="${m.id}">${esc(m.full_name)}</option>`).join("")}</select></label>
+      <label class="f"><span>${esc(t("role"))}</span><select name="role">${["chairperson","treasurer","secretary","investment_lead"].map(r=>`<option value="${r}">${esc(t(r))}</option>`).join("")}</select></label>
+      <p class="hint">${esc(t("until"))} ${esc(fmtDate(new Date(new Date().setMonth(new Date().getMonth()+Number(st.officer_term_months)))))}</p>
+      <button class="btn full" style="margin-top:14px" type="submit">${esc(t("assignrole"))}</button></form></div></details></div>`:""}
+    ${isOfficer()?`<div class="sheet"><details><summary>${esc(t("resetpin"))}</summary><div class="body"><form id="pinf">
+      <label class="f"><span>${esc(t("username"))}</span><input name="username" required autocapitalize="none"></label>
+      <label class="f"><span>${esc(t("newpin"))}</span><input name="new_pin" inputmode="numeric" pattern="\\d{6}" maxlength="6" required></label>
+      <button class="btn full" style="margin-top:14px" type="submit">${esc(t("reset"))}</button></form></div></details></div>`:""}`;
+  } else if(sub==="rules"){
+    body=`<div class="sheet"><div class="row"><p class="small muted">${esc(t("effective"))} ${esc(fmtDate(st.effective_from))}${st.note?` · ${esc(st.note)}`:""}</p></div>${SETTING_FIELDS.map(k=>`<div class="row between small"><span>${esc(t("s_"+k))}</span><span class="amt num">${esc(settingDisplay(k,st[k]))}</span></div>`).join("")}</div>
+      <button class="btn quiet full" id="goProp">${esc(t("proposechange"))}</button>`;
+  } else if(sub==="invest"){
+    const {data}=await sb.from("investments").select("*, investment_valuations(value,valued_on)").order("created_at",{ascending:false});
+    const canEdit=has("investment_lead")||has("treasurer");
+    body=`<div class="sheet list">${data?.length? data.map(i=>{ const v=(i.investment_valuations||[]).sort((a,b)=>b.valued_on.localeCompare(a.valued_on))[0];
+      return `<div class="row"><div class="l"><p class="name">${esc(i.name)}</p><p class="small muted">${esc(t(i.type))}${i.institution?` · ${esc(i.institution)}`:""}${i.invested_on?` · ${esc(fmtDate(i.invested_on))}`:""}${i.expected_annual_return_pct?` · ${Number(i.expected_annual_return_pct)}%/yr`:""}</p></div><div class="r"><p class="amt num">${money(v?v.value:i.amount_invested)}</p>${pillFor(i.status==="exited"?"exited_inv":i.status)}${canEdit&&i.status==="active"?`<div style="margin-top:6px"><button class="btn quiet sm" data-val="${i.id}">${esc(t("addvaluation"))}</button></div>`:""}</div></div>`; }).join("") : `<div class="empty">${esc(t("nothing"))}</div>`}</div>
+    ${canEdit?`<div class="sheet"><details><summary>${esc(t("addinvestment"))}</summary><div class="body"><form id="invf">
+      <label class="f"><span>${esc(t("name"))}</span><input name="name" required></label>
+      <label class="f"><span>${esc(t("type"))}</span><select name="type">${["unit_trust","fixed_deposit","treasury","business","land","stocks","other"].map(k=>`<option value="${k}">${esc(t(k))}</option>`).join("")}</select></label>
+      <label class="f"><span>${esc(t("institution"))}</span><input name="institution"></label>
+      <label class="f"><span>${esc(t("amount"))}</span><input name="amount_invested" type="number" inputmode="numeric" min="0" step="1" required></label>
+      <label class="f"><span>${esc(t("paidon"))}</span><input name="invested_on" type="date" value="${today()}"></label>
+      <label class="f"><span>%/yr</span><input name="expected_annual_return_pct" type="number" step="0.1" inputmode="decimal"></label>
+      <label class="f"><span>${esc(t("proposalkind"))}</span><select name="status"><option value="active">${esc(t("active"))}</option><option value="proposed">${esc(t("proposed"))}</option></select></label>
+      <button class="btn full" style="margin-top:14px" type="submit">${esc(t("add"))}</button></form></div></details></div>`:""}`;
+  } else {
+    body=`<div class="sheet"><div class="row"><p class="name">${esc(S.me.full_name)} <span class="muted small">@${esc(S.me.username||"")}</span></p><p class="small muted">${S.roles.map(r=>esc(t(r))).join(", ")||esc(t("member"))}</p></div>
+      <div class="row"><form id="cpf"><label class="f"><span>${esc(t("changepin"))}</span><input name="pin" type="password" inputmode="numeric" pattern="\\d{6}" maxlength="6" required placeholder="${esc(t("newpin"))}"></label><button class="btn quiet full" style="margin-top:10px" type="submit">${esc(t("changepin"))}</button></form></div>
+      <div class="row"><button class="btn quiet full" id="so">${esc(t("signout"))}</button></div></div>`;
+  }
+  el.innerHTML=`<div class="tabs">${tabs.map(([k,l])=>`<button data-s="${k}" class="${sub===k?"on":""}">${esc(l)}</button>`).join("")}</div>${body}`;
+  el.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{S.sub.more=b.dataset.s; render();});
+  const on=(id,fn)=>{const f=document.getElementById(id); if(f) f.onsubmit=e=>{e.preventDefault(); busy(f.querySelector("button[type=submit]"),()=>fn(form(f),f));};};
+  on("memf", async d=>{ const {error}=await sb.from("members").insert({full_name:d.full_name,username:d.username.toLowerCase().trim(),phone:d.phone||null,language:d.language}); if(error) throw error; toast(t("saved")); render(); });
+  on("rolef", async d=>{ const ts=new Date(); const te=new Date(ts); te.setMonth(te.getMonth()+Number(st.officer_term_months)); const {error}=await sb.from("role_assignments").insert({member_id:d.member_id,role:d.role,term_start:ts.toISOString().slice(0,10),term_end:te.toISOString().slice(0,10)}); if(error) throw error; toast(t("saved")); render(); });
+  on("pinf", async d=>{ const {data,error}=await sb.functions.invoke("reset-pin",{body:{username:d.username,new_pin:d.new_pin}}); if(error) throw new Error(error.message); if(data?.error) throw new Error(data.error); toast(t("done")); });
+  on("invf", async d=>{ const {error}=await sb.from("investments").insert({name:d.name,type:d.type,institution:d.institution||null,amount_invested:Number(d.amount_invested),invested_on:d.invested_on||null,expected_annual_return_pct:d.expected_annual_return_pct?Number(d.expected_annual_return_pct):null,status:d.status,managed_by:S.me.id}); if(error) throw error; toast(t("saved")); render(); });
+  on("cpf", async d=>{ if(!/^\d{6}$/.test(d.pin)) throw new Error(t("pinformat")); const {error}=await sb.auth.updateUser({password:d.pin}); if(error) throw error; toast(t("saved")); });
+  el.querySelectorAll("[data-val]").forEach(b=>b.onclick=()=>{ const v=prompt(t("value")); if(!v) return; busy(b,async()=>{const {error}=await sb.from("investment_valuations").insert({investment_id:b.dataset.val,valued_on:today(),value:Number(v)}); if(error) throw error; toast(t("saved")); render();}); });
+  const gp=$("#goProp"); if(gp) gp.onclick=()=>{S.tab="vote"; S.sub.vote="new"; render();};
+  const so=$("#so"); if(so) so.onclick=signOut;
+}
+
+// ---------------------------------------------------------------- boot
+sb.auth.onAuthStateChange((ev)=>{ if(ev==="SIGNED_OUT"){ S.session=null; S.me=null; S.roles=[]; render(); } });
+(async()=>{ try{ await loadContext(); } catch(e){ console.error(e); } render(); })();
+if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
