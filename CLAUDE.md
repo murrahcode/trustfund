@@ -51,9 +51,12 @@ able to change contributions, add members, and amend rules without a deploy.
 Username + 6-digit PIN. Usernames map to hidden `username@fund.local` addresses
 in Supabase Auth (so "Confirm email" must stay **off** in the dashboard). A
 trigger on `auth.users` refuses sign-up for any username not already on the
-member list — that is the access gate. Officers reset a forgotten PIN via the
-`reset-pin` edge function, which verifies `is_officer()` before using the
-service role key.
+member list — that is the access gate. Two edge functions hold the service
+role key: `reset-pin` (officers reset a forgotten PIN) and `update-member`
+(edit name/phone/username/status; officers for anyone, members for themselves).
+**Never change a signed-up member's `username` with a plain table update** —
+the login email must change with it, and a DB trigger (`guard_username`)
+blocks it. Always go through `update-member`.
 
 ## Frontend conventions in index.html
 - `STR.en` / `STR.sw` hold every string; `t(key)` looks up the current language.
@@ -72,7 +75,10 @@ of `assess_late_fines` / `refresh_member_status` (currently run from SQL),
 push or SMS reminders, PDF statements, projection modelling.
 
 ## Working on this
-Schema changes go through a new numbered SQL file in `supabase/` and are applied
-as a Supabase migration — never edit `trust_fund_schema_v1.sql` after the fact.
+Schema changes go through a new numbered SQL file in `supabase/`
+(`migrations_002_guard_username.sql` is the pattern) and are applied as a
+Supabase migration — never edit `trust_fund_schema_v1.sql` after the fact.
+Edge function source lives in `supabase/functions/<name>/index.ts`; deploy with
+`supabase functions deploy <name>` after editing.
 After any schema change, check the Supabase security advisors for new RLS or
 function-exposure warnings.

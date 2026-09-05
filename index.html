@@ -134,7 +134,7 @@ const STR = {
     memberslist:"Members", addmember:"Add a member", fullname:"Full name", phone:"Phone", language:"Language", add:"Add member", roles:"Roles", assignrole:"Assign a role", role:"Role", chairperson:"Chairperson", treasurer:"Treasurer", secretary:"Secretary", investment_lead:"Investment lead", until:"until", noaccount:"Not signed up yet", active:"Active", suspended:"Suspended", exited:"Left", resetpin:"Reset a member's PIN", reset:"Reset PIN",
     rules:"Fund rules", proposechange:"Propose a rule change", effective:"In force since", currentval:"Now", newval:"Proposed", investments:"Investments", addinvestment:"Add an investment", valuation:"Latest value", addvaluation:"Update value", name:"Name", type:"Type", institution:"Institution", value:"Value", ason:"As of",
     fixed_deposit:"Fixed deposit", treasury:"Treasury bills/bonds", unit_trust:"Unit trust", business:"Business", land:"Land", stocks:"Shares", proposed:"Proposed", exited_inv:"Exited",
-    notlisted:"That username is not on the member list. Ask an officer to add you first.", alreadysetup:"This username already has a PIN. Sign in instead, or ask an officer to reset it.", account:"My account", changepin:"Change my PIN", signout:"Sign out", saved:"Saved", done:"Done", error:"Something went wrong", cancel:"Cancel", loading:"Loading…", wrongpin:"Wrong username or PIN", of:"of",
+    edit:"Edit", save:"Save", status:"Status", editmember:"Edit member", editprofile:"Edit my details", usernamehint:"Changing the username changes how they sign in.", notlisted:"That username is not on the member list. Ask an officer to add you first.", alreadysetup:"This username already has a PIN. Sign in instead, or ask an officer to reset it.", account:"My account", changepin:"Change my PIN", signout:"Sign out", saved:"Saved", done:"Done", error:"Something went wrong", cancel:"Cancel", loading:"Loading…", wrongpin:"Wrong username or PIN", of:"of",
     s_initial_deposit:"Initial deposit", s_monthly_contribution:"Monthly contribution", s_deposit_day:"Deposit day of month", s_grace_days:"Grace days", s_late_fine:"Late fine", s_missed_months_before_suspension:"Missed months before suspension",
     s_loan_multiplier:"Loan limit (× your shares)", s_loan_interest_rate_pct:"Loan interest % per month", s_loan_interest_method:"Interest method", s_loan_min_term_months:"Min loan term (months)", s_loan_max_term_months:"Max loan term (months)", s_loan_lockout_months:"No loans for first (months)",
     s_emergency_withdrawal_pct:"Emergency withdrawal (% of shares)", s_emergency_repayment_months:"Emergency repayment (months)", s_vote_threshold_pct:"Votes needed to pass (%)", s_vote_window_days:"Voting window (days)", s_large_investment_threshold:"Chair sign-off above", s_officer_term_months:"Officer term (months)",
@@ -159,7 +159,7 @@ const STR = {
     memberslist:"Wanachama", addmember:"Ongeza mwanachama", fullname:"Jina kamili", phone:"Simu", language:"Lugha", add:"Ongeza", roles:"Nafasi", assignrole:"Toa nafasi", role:"Nafasi", chairperson:"Mwenyekiti", treasurer:"Mtunza Hazina", secretary:"Katibu", investment_lead:"Kiongozi wa Uwekezaji", until:"hadi", noaccount:"Hajajisajili", active:"Hai", suspended:"Amesimamishwa", exited:"Ameondoka", resetpin:"Weka upya PIN ya mwanachama", reset:"Weka upya PIN",
     rules:"Kanuni za mfuko", proposechange:"Pendekeza badiliko la kanuni", effective:"Zinatumika tangu", currentval:"Sasa", newval:"Inayopendekezwa", investments:"Uwekezaji", addinvestment:"Ongeza uwekezaji", valuation:"Thamani ya sasa", addvaluation:"Sasisha thamani", name:"Jina", type:"Aina", institution:"Taasisi", value:"Thamani", ason:"Kufikia",
     fixed_deposit:"Akiba ya muda maalum", treasury:"Hatifungani za serikali", unit_trust:"Mfuko wa uwekezaji", business:"Biashara", land:"Ardhi", stocks:"Hisa", proposed:"Imependekezwa", exited_inv:"Imetoka",
-    notlisted:"Jina hilo halipo kwenye orodha ya wanachama. Omba kiongozi akuongeze kwanza.", alreadysetup:"Jina hili tayari lina PIN. Ingia, au omba kiongozi aiweke upya.", account:"Akaunti yangu", changepin:"Badilisha PIN yangu", signout:"Toka", saved:"Imehifadhiwa", done:"Imekamilika", error:"Kuna hitilafu", cancel:"Ghairi", loading:"Inapakia…", wrongpin:"Jina au PIN si sahihi", of:"kati ya",
+    edit:"Hariri", save:"Hifadhi", status:"Hali", editmember:"Hariri mwanachama", editprofile:"Hariri taarifa zangu", usernamehint:"Kubadilisha jina la mtumiaji kunabadilisha jinsi anavyoingia.", notlisted:"Jina hilo halipo kwenye orodha ya wanachama. Omba kiongozi akuongeze kwanza.", alreadysetup:"Jina hili tayari lina PIN. Ingia, au omba kiongozi aiweke upya.", account:"Akaunti yangu", changepin:"Badilisha PIN yangu", signout:"Toka", saved:"Imehifadhiwa", done:"Imekamilika", error:"Kuna hitilafu", cancel:"Ghairi", loading:"Inapakia…", wrongpin:"Jina au PIN si sahihi", of:"kati ya",
     s_initial_deposit:"Mchango wa kwanza", s_monthly_contribution:"Mchango wa kila mwezi", s_deposit_day:"Tarehe ya mchango", s_grace_days:"Siku za nafasi", s_late_fine:"Faini ya kuchelewa", s_missed_months_before_suspension:"Miezi ya kukosa kabla ya kusimamishwa",
     s_loan_multiplier:"Kikomo cha mkopo (× hisa zako)", s_loan_interest_rate_pct:"Riba ya mkopo % kwa mwezi", s_loan_interest_method:"Njia ya riba", s_loan_min_term_months:"Muda mfupi wa mkopo (miezi)", s_loan_max_term_months:"Muda mrefu wa mkopo (miezi)", s_loan_lockout_months:"Hakuna mikopo miezi ya kwanza",
     s_emergency_withdrawal_pct:"Kutoa dharura (% ya hisa)", s_emergency_repayment_months:"Kurudisha dharura (miezi)", s_vote_threshold_pct:"Kura zinazohitajika kupita (%)", s_vote_window_days:"Muda wa kupiga kura (siku)", s_large_investment_threshold:"Saini ya Mwenyekiti zaidi ya", s_officer_term_months:"Muda wa viongozi (miezi)",
@@ -455,6 +455,28 @@ async function voteView(el){
       const {error}=await sb.rpc("open_proposal",{p_kind:d.kind,p_title:d.title,p_description:d.description||null,p_amount:d.amount?Number(d.amount):null,p_payload:payload}); if(error) throw error; S.sub.vote="open"; toast(t("open")); render(); });}; }
 }
 
+// ---------------------------------------------------------------- member edit (via update-member function)
+function memberEditForm(m, {officer}){
+  return `<form class="editf" data-id="${m.id}">
+    <label class="f"><span>${esc(t("fullname"))}</span><input name="full_name" value="${esc(m.full_name)}" required></label>
+    <label class="f"><span>${esc(t("username"))}</span><input name="username" value="${esc(m.username||"")}" pattern="[a-z0-9_]{3,20}" autocapitalize="none" required><p class="hint">${esc(t("usernamehint"))}</p></label>
+    <label class="f"><span>${esc(t("phone"))}</span><input name="phone" value="${esc(m.phone||"")}" inputmode="tel"></label>
+    <label class="f"><span>${esc(t("language"))}</span><select name="language"><option value="sw" ${m.language==="sw"?"selected":""}>Kiswahili</option><option value="en" ${m.language==="en"?"selected":""}>English</option></select></label>
+    ${officer?`<label class="f"><span>${esc(t("status"))}</span><select name="status">${["active","suspended","exited"].map(x=>`<option value="${x}" ${m.status===x?"selected":""}>${esc(t(x))}</option>`).join("")}</select></label>`:""}
+    <div class="btnrow" style="margin-top:14px"><button class="btn" type="submit">${esc(t("save"))}</button><button class="btn quiet" type="button" data-cancel>${esc(t("cancel"))}</button></div></form>`;
+}
+function bindMemberEdit(el, after){
+  el.querySelectorAll("form.editf").forEach(f=>{
+    f.querySelector("[data-cancel]").onclick=()=>{S.sub.editMember=null; render();};
+    f.onsubmit=e=>{e.preventDefault(); busy(f.querySelector("button[type=submit]"),async()=>{
+      const d=form(f); const body={member_id:f.dataset.id, full_name:d.full_name, username:d.username, phone:d.phone||null, language:d.language}; if(d.status) body.status=d.status;
+      const {data,error}=await sb.functions.invoke("update-member",{body});
+      if(error){ let msg=error.message; try{ const r=await error.context?.json(); if(r?.error) msg=r.error; }catch{} throw new Error(msg); }
+      if(data?.error) throw new Error(data.error);
+      toast(t("saved")); S.sub.editMember=null; await after?.(); render(); });};
+  });
+}
+
 // ---------------------------------------------------------------- more
 async function moreView(el){
   await loadMembers(); const st=S.settings;
@@ -464,7 +486,8 @@ async function moreView(el){
     const {data:roles}=await sb.from("role_assignments").select("*").lte("term_start",today()).gte("term_end",today());
     const {data:bals}=await sb.from("member_balances").select("*");
     body=`<div class="sheet list">${S.cache.members.map(m=>{ const rs=(roles||[]).filter(r=>r.member_id===m.id); const b=(bals||[]).find(x=>x.member_id===m.id);
-      return `<div class="row"><div class="l"><p class="name">${esc(m.full_name)} <span class="muted small">@${esc(m.username||"")}</span></p><p class="small muted">${rs.map(r=>esc(t(r.role))).join(", ")}${rs.length?" · ":""}${m.user_id?"":esc(t("noaccount"))+" · "}${esc(m.phone||"")}</p></div><div class="r"><p class="amt num">${money(b?.total_shares)}</p>${m.status!=="active"?pillFor(m.status):""}</div></div>`; }).join("")}</div>
+      const editing=S.sub.editMember===m.id;
+      return `<div class="row" style="flex-direction:column"><div style="display:flex;justify-content:space-between;width:100%;gap:12px"><div class="l"><p class="name">${esc(m.full_name)} <span class="muted small">@${esc(m.username||"")}</span></p><p class="small muted">${rs.map(r=>esc(t(r.role))).join(", ")}${rs.length?" · ":""}${m.user_id?"":esc(t("noaccount"))+" · "}${esc(m.phone||"")}</p></div><div class="r"><p class="amt num">${money(b?.total_shares)}</p>${m.status!=="active"?pillFor(m.status):""}${isOfficer()&&!editing?`<div style="margin-top:6px"><button class="btn quiet sm" data-edit="${m.id}">${esc(t("edit"))}</button></div>`:""}</div></div>${editing?memberEditForm(m,{officer:true}):""}</div>`; }).join("")}</div>
     ${isOfficer()?`<div class="sheet"><details><summary>${esc(t("addmember"))}</summary><div class="body"><form id="memf">
       <label class="f"><span>${esc(t("fullname"))}</span><input name="full_name" required></label>
       <label class="f"><span>${esc(t("username"))}</span><input name="username" required pattern="[a-z0-9_]{3,20}" autocapitalize="none"><p class="hint">a–z, 0–9, _ · 3–20</p></label>
@@ -498,7 +521,8 @@ async function moreView(el){
       <label class="f"><span>${esc(t("proposalkind"))}</span><select name="status"><option value="active">${esc(t("active"))}</option><option value="proposed">${esc(t("proposed"))}</option></select></label>
       <button class="btn full" style="margin-top:14px" type="submit">${esc(t("add"))}</button></form></div></details></div>`:""}`;
   } else {
-    body=`<div class="sheet"><div class="row"><p class="name">${esc(S.me.full_name)} <span class="muted small">@${esc(S.me.username||"")}</span></p><p class="small muted">${S.roles.map(r=>esc(t(r))).join(", ")||esc(t("member"))}</p></div>
+    const editing=S.sub.editMember===S.me.id;
+    body=`<div class="sheet"><div class="row"><div class="row between" style="padding:0"><div><p class="name">${esc(S.me.full_name)} <span class="muted small">@${esc(S.me.username||"")}</span></p><p class="small muted">${S.roles.map(r=>esc(t(r))).join(", ")||esc(t("member"))}${S.me.phone?` · ${esc(S.me.phone)}`:""}</p></div>${editing?"":`<button class="btn quiet sm" data-edit="${S.me.id}">${esc(t("editprofile"))}</button>`}</div>${editing?memberEditForm(S.me,{officer:false}):""}</div>
       <div class="row"><form id="cpf"><label class="f"><span>${esc(t("changepin"))}</span><input name="pin" type="password" inputmode="numeric" pattern="\\d{6}" maxlength="6" required placeholder="${esc(t("newpin"))}"></label><button class="btn quiet full" style="margin-top:10px" type="submit">${esc(t("changepin"))}</button></form></div>
       <div class="row"><button class="btn quiet full" id="so">${esc(t("signout"))}</button></div></div>`;
   }
@@ -507,10 +531,12 @@ async function moreView(el){
   const on=(id,fn)=>{const f=document.getElementById(id); if(f) f.onsubmit=e=>{e.preventDefault(); busy(f.querySelector("button[type=submit]"),()=>fn(form(f),f));};};
   on("memf", async d=>{ const {error}=await sb.from("members").insert({full_name:d.full_name,username:d.username.toLowerCase().trim(),phone:d.phone||null,language:d.language}); if(error) throw error; toast(t("saved")); render(); });
   on("rolef", async d=>{ const ts=new Date(); const te=new Date(ts); te.setMonth(te.getMonth()+Number(st.officer_term_months)); const {error}=await sb.from("role_assignments").insert({member_id:d.member_id,role:d.role,term_start:ts.toISOString().slice(0,10),term_end:te.toISOString().slice(0,10)}); if(error) throw error; toast(t("saved")); render(); });
-  on("pinf", async d=>{ const {data,error}=await sb.functions.invoke("reset-pin",{body:{username:d.username,new_pin:d.new_pin}}); if(error) throw new Error(error.message); if(data?.error) throw new Error(data.error); toast(t("done")); });
+  on("pinf", async d=>{ const {data,error}=await sb.functions.invoke("reset-pin",{body:{username:d.username,new_pin:d.new_pin}}); if(error){ let msg=error.message; try{ const r=await error.context?.json(); if(r?.error) msg=r.error; }catch{} throw new Error(msg); } if(data?.error) throw new Error(data.error); toast(t("done")); });
   on("invf", async d=>{ const {error}=await sb.from("investments").insert({name:d.name,type:d.type,institution:d.institution||null,amount_invested:Number(d.amount_invested),invested_on:d.invested_on||null,expected_annual_return_pct:d.expected_annual_return_pct?Number(d.expected_annual_return_pct):null,status:d.status,managed_by:S.me.id}); if(error) throw error; toast(t("saved")); render(); });
   on("cpf", async d=>{ if(!/^\d{6}$/.test(d.pin)) throw new Error(t("pinformat")); const {error}=await sb.auth.updateUser({password:d.pin}); if(error) throw error; toast(t("saved")); });
   el.querySelectorAll("[data-val]").forEach(b=>b.onclick=()=>{ const v=prompt(t("value")); if(!v) return; busy(b,async()=>{const {error}=await sb.from("investment_valuations").insert({investment_id:b.dataset.val,valued_on:today(),value:Number(v)}); if(error) throw error; toast(t("saved")); render();}); });
+  el.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{S.sub.editMember=b.dataset.edit; render();});
+  bindMemberEdit(el, loadContext);
   const gp=$("#goProp"); if(gp) gp.onclick=()=>{S.tab="vote"; S.sub.vote="new"; render();};
   const so=$("#so"); if(so) so.onclick=signOut;
 }
