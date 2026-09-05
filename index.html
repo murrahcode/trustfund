@@ -229,6 +229,7 @@ const STR = {
     reviewnow:"Tap to review", castvote:"Tap to vote", adminhint:"No end date. Can do everything an officer can.", edit:"Edit", save:"Save", status:"Status", editmember:"Edit member", editprofile:"Edit my details", usernamehint:"Changing the username changes how they sign in.", notlisted:"That username is not on the member list. Ask an officer to add you first.", alreadysetup:"This username already has a PIN. Sign in instead, or ask an officer to reset it.", account:"My account", changepin:"Change my PIN", signout:"Sign out", saved:"Saved", done:"Done", error:"Something went wrong", cancel:"Cancel", loading:"Loading…", wrongpin:"Wrong username or PIN", of:"of",
     share:"Share", linkcopied:"Link copied", waive:"Forgive", restore:"Restore", deposit:"Deposit",
     allfines:"All fines", pendingtotal:"Pending fines", chargedon:"charged on",
+    contribution:"Contribution", plusfines:"plus fines", finesowed:"fines owed",
     finesnotretracted:"Saving attendance again does not cancel fines already charged — forgive those from the member's Fines list.", heldhint:"Fines are not charged now. Open the meeting afterwards and use the close button.",
     meetings:"Meetings", schedulemeeting:"Schedule a meeting", date:"Date", time:"Time", location:"Location", agenda:"Agenda", minutes:"Minutes", savemins:"Save minutes", attendance:"Attendance", present:"Present", excused:"Excused", absent:"Absent", saveattendance:"Save attendance", closemeeting:"Close meeting and charge fines", absencefinewarn:"Each absent member will be fined", nofineset:"No absence fine is set.", finesraised:"fines raised", scheduled:"Scheduled", held:"Held", fines:"Fines", late_deposit:"Late deposit", missed_meeting:"Missed a meeting", waived:"Forgiven", infines:"in fines", tapview:"Tap to view", s_meeting_absence_fine:"Fine for missing a meeting",
     s_initial_deposit:"Initial deposit", s_monthly_contribution:"Monthly contribution", s_deposit_day:"Deposit day of month", s_grace_days:"Grace days", s_late_fine:"Late fine", s_missed_months_before_suspension:"Missed months before suspension",
@@ -258,6 +259,7 @@ const STR = {
     reviewnow:"Gusa kupitia", castvote:"Gusa kupiga kura", adminhint:"Haina mwisho. Anaweza kufanya yote wanayoweza viongozi.", edit:"Hariri", save:"Hifadhi", status:"Hali", editmember:"Hariri mwanachama", editprofile:"Hariri taarifa zangu", usernamehint:"Kubadilisha jina la mtumiaji kunabadilisha jinsi anavyoingia.", notlisted:"Jina hilo halipo kwenye orodha ya wanachama. Omba kiongozi akuongeze kwanza.", alreadysetup:"Jina hili tayari lina PIN. Ingia, au omba kiongozi aiweke upya.", account:"Akaunti yangu", changepin:"Badilisha PIN yangu", signout:"Toka", saved:"Imehifadhiwa", done:"Imekamilika", error:"Kuna hitilafu", cancel:"Ghairi", loading:"Inapakia…", wrongpin:"Jina au PIN si sahihi", of:"kati ya",
     share:"Sambaza", linkcopied:"Kiungo kimenakiliwa", waive:"Samehe", restore:"Rudisha", deposit:"Lipa",
     allfines:"Faini zote", pendingtotal:"Faini zinazosubiri", chargedon:"zimetozwa tarehe",
+    contribution:"Mchango", plusfines:"pamoja na faini", finesowed:"faini anazodaiwa",
     finesnotretracted:"Kuhifadhi mahudhurio tena hakufuti faini zilizokwisha tozwa — zisamehe kutoka kwenye orodha ya Faini ya mwanachama.", heldhint:"Faini hazitozwi sasa. Fungua mkutano baadaye kisha tumia kitufe cha kufunga.",
     meetings:"Mikutano", schedulemeeting:"Panga mkutano", date:"Tarehe", time:"Saa", location:"Mahali", agenda:"Ajenda", minutes:"Muhtasari", savemins:"Hifadhi muhtasari", attendance:"Mahudhurio", present:"Yupo", excused:"Ameruhusiwa", absent:"Hayupo", saveattendance:"Hifadhi mahudhurio", closemeeting:"Funga mkutano na utoze faini", absencefinewarn:"Kila asiyehudhuria atatozwa faini ya", nofineset:"Hakuna faini ya kutohudhuria iliyowekwa.", finesraised:"faini zimetozwa", scheduled:"Umepangwa", held:"Umefanyika", fines:"Faini", late_deposit:"Mchango wa kuchelewa", missed_meeting:"Kukosa mkutano", waived:"Imesamehewa", infines:"za faini", tapview:"Gusa kuona", s_meeting_absence_fine:"Faini ya kukosa mkutano",
     s_initial_deposit:"Mchango wa kwanza", s_monthly_contribution:"Mchango wa kila mwezi", s_deposit_day:"Tarehe ya mchango", s_grace_days:"Siku za nafasi", s_late_fine:"Faini ya kuchelewa", s_missed_months_before_suspension:"Miezi ya kukosa kabla ya kusimamishwa",
@@ -439,6 +441,8 @@ async function homeView(el){
   const stateText = mm?.status==="paid" ? t("paid") : (mine?.length? t("pending") : (mm?.status==="partial"? t("partial") : t("notyet")));
   const isLate = mm && mm.status!=="paid" && !mine?.length && new Date(mm.due_on) < new Date(today());
   const pct = fs? Math.min(100, (Number(fs.fund_value)/Number(fs.target_amount))*100) : 0;
+  const mmFines = Number(mm?.fines_due || 0);
+  const heroAmount = mmFines>0 ? Number(mm?.total_due || 0) : Number(mm?.expected ?? st.monthly_contribution);
   const tasks=[];
   if(has("treasurer") && pendingC?.count) tasks.push({label:`${pendingC.count} ${t("toconfirm")}`, hint:t("reviewnow"), icon:"money", tab:"money"});
   if((has("treasurer")||has("chairperson")) && loanReqs?.count) tasks.push({label:`${loanReqs.count} ${t("loanreqs")}`, hint:t("reviewnow"), icon:"loans", tab:"loans"});
@@ -449,7 +453,8 @@ async function homeView(el){
   el.innerHTML=`
   <section class="hero">
     <p class="eyebrow">${esc(t("thismonth"))} · ${esc(fmtMonth(period))}</p>
-    <div class="big num"><small>${esc(cur)}</small>${Number(mm?.expected ?? st.monthly_contribution).toLocaleString("en-US")}</div>
+    <div class="big num"><small>${esc(cur)}</small>${heroAmount.toLocaleString("en-US")}</div>
+    ${mmFines>0?`<p class="due">${esc(t("contribution"))} ${esc(money(mm?.expected))} · ${esc(t("plusfines"))} ${esc(money(mmFines))}</p>`:""}
     <p class="status ${paidState}">${esc(stateText)}</p>
     <p class="due">${esc(t("dueby"))} ${esc(fmtDate(mm?.due_on))}${isLate?` · ${esc(t("late"))}`:""}</p>
     ${paidState==="bad"?`<button class="btn" id="goPay">${esc(t("submitdeposit"))}</button>`:""}
@@ -534,7 +539,7 @@ async function moneyView(el){
   else if(sub==="record"){ body=`<div class="sheet"><div class="row">${depositForm({officer:true})}</div></div>`; }
   else if(sub==="month"){
     const {data}=await sb.from("member_month_status").select("*").eq("period",monthStart());
-    body=`<div class="sheet"><div class="row head"><h3>${esc(fmtMonth(monthStart()))}</h3><span class="small muted num">${(data||[]).filter(x=>x.status==="paid").length} ${esc(t("of"))} ${(data||[]).length}</span></div><div class="month-grid">${(data||[]).map(x=>`<div class="${x.status}"><b>${esc(memberName(x.member_id))}</b><span class="tiny">${esc(t(x.status==="missing"?"notyet":x.status))}</span></div>`).join("")}</div></div>`;
+    body=`<div class="sheet"><div class="row head"><h3>${esc(fmtMonth(monthStart()))}</h3><span class="small muted num">${(data||[]).filter(x=>x.status==="paid").length} ${esc(t("of"))} ${(data||[]).length}</span></div><div class="month-grid">${(data||[]).map(x=>`<div class="${x.status}"><b>${esc(memberName(x.member_id))}</b><span class="tiny">${esc(t(x.status==="missing"?"notyet":x.status))}</span>${Number(x.fines_due||0)>0?`<span class="tiny" style="display:block">+ ${esc(money(x.fines_due))}</span>`:""}</div>`).join("")}</div></div>`;
   } else if(sub==="review"){
     const {data}=await sb.from("contributions").select("*").eq("status","submitted").order("created_at");
     body = data?.length? `<div class="sheet">${data.map(c=>`<div class="row" style="flex-direction:column"><div class="prow top"><span class="av">${esc(initials(memberName(c.member_id)))}</span><span class="l"><span class="name">${esc(memberName(c.member_id))}</span><span class="sub wrap">${esc(t(c.kind))}${c.period?` · ${esc(fmtMonth(c.period))}`:""} · ${esc(fmtDate(c.paid_on))} · ${esc(c.channel||"")} ${esc(c.reference||"")}</span></span><span class="amt num">${money(c.amount)}</span></div>
@@ -671,7 +676,7 @@ async function moreView(el){
       return `<div class="row" style="flex-direction:column;gap:0">
         <div class="prow">
           <span class="av">${esc(initials(m.full_name))}</span>
-          <span class="l"><span class="name">${esc(m.full_name)}</span><span class="sub">${esc(sub)}</span></span>
+          <span class="l"><span class="name">${esc(m.full_name)}</span><span class="sub">${esc(sub)}</span>${Number(b?.fines_outstanding||0)>0?`<span class="tiny" style="color:var(--gold)">${esc(money(b.fines_outstanding))} ${esc(t("finesowed"))}</span>`:""}</span>
           <span class="r"><span class="amt num">${amt(b?.total_shares)}</span>${m.status!=="active"?pillFor(m.status):""}${isOfficer()?`<button class="btn ghost sm" data-edit="${editing?"":m.id}" style="padding:6px">${editing?esc(t("cancel")):ic("chev","chev")}</button>`:""}</span>
         </div>${editing?memberEditForm(m,{officer:true}):""}</div>`; }).join("")}</div>
     ${isOfficer()?`<div class="sheet"><details><summary><span style="display:flex;align-items:center;gap:12px"><span class="ico" style="width:38px;height:38px;border-radius:11px;background:var(--g100);display:grid;place-items:center">${ic("plus")}</span>${esc(t("addmember"))}</span></summary><div class="body"><form id="memf">
