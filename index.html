@@ -299,10 +299,13 @@ const $ = sel => document.querySelector(sel);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money = n => (S.settings?.currency || "TZS") + " " + Number(n||0).toLocaleString("en-US",{maximumFractionDigits:0});
 const amt = n => Number(n||0).toLocaleString("en-US",{maximumFractionDigits:0});
-const fmtDate = d => d ? new Date(d).toLocaleDateString(lang==="sw"?"sw-TZ":"en-GB",{day:"numeric",month:"short",year:"numeric"}) : "";
-const fmtMonth = d => d ? new Date(d).toLocaleDateString(lang==="sw"?"sw-TZ":"en-GB",{month:"long",year:"numeric"}) : "";
-const monthStart = (d=new Date()) => new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0,10);
-const today = () => new Date().toISOString().slice(0,10);
+const pad2 = n => String(n).padStart(2,"0");
+const localISO = d => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+const parseISO = s => { const [y,m,d] = String(s).slice(0,10).split("-").map(Number); return new Date(y, m-1, d||1); };
+const fmtDate = d => d ? parseISO(d).toLocaleDateString(lang==="sw"?"sw-TZ":"en-GB",{day:"numeric",month:"short",year:"numeric"}) : "";
+const fmtMonth = d => d ? parseISO(d).toLocaleDateString(lang==="sw"?"sw-TZ":"en-GB",{month:"long",year:"numeric"}) : "";
+const monthStart = (d=new Date()) => localISO(new Date(d.getFullYear(), d.getMonth(), 1));
+const today = () => localISO(new Date());
 let toastTimer;
 function toast(msg, err=false){ const el=$("#toast"); el.textContent=msg; el.className="toast show"+(err?" err":""); clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.className="toast",2600); }
 function fail(e){ console.error(e); toast(e?.message || e?.error_description || t("error"), true); }
@@ -667,9 +670,9 @@ async function moreView(el){
   on("memf", async d=>{ const {error}=await sb.from("members").insert({full_name:d.full_name,username:d.username.toLowerCase().trim(),phone:d.phone||null,language:d.language}); if(error) throw error; toast(t("saved")); render(); });
   on("rolef", async d=>{ const ts=new Date(); let te;
     if(d.role==="admin"){ te="2099-12-31"; }
-    else { const e=new Date(ts); e.setMonth(e.getMonth()+Number(st.officer_term_months)); te=e.toISOString().slice(0,10); }
-    const {error}=await sb.from("role_assignments").insert({member_id:d.member_id,role:d.role,term_start:ts.toISOString().slice(0,10),term_end:te}); if(error) throw error; toast(t("saved")); render(); });
-  const rsel=$("#rolesel"); if(rsel){ const rh=$("#rolehint"); const syncRole=()=>{ rh.textContent = rsel.value==="admin" ? t("adminhint") : t("until")+" "+fmtDate(new Date(new Date().setMonth(new Date().getMonth()+Number(st.officer_term_months)))); }; rsel.onchange=syncRole; syncRole(); }
+    else { const e=new Date(ts); e.setMonth(e.getMonth()+Number(st.officer_term_months)); te=localISO(e); }
+    const {error}=await sb.from("role_assignments").insert({member_id:d.member_id,role:d.role,term_start:localISO(ts),term_end:te}); if(error) throw error; toast(t("saved")); render(); });
+  const rsel=$("#rolesel"); if(rsel){ const rh=$("#rolehint"); const syncRole=()=>{ rh.textContent = rsel.value==="admin" ? t("adminhint") : t("until")+" "+fmtDate(localISO(new Date(new Date().setMonth(new Date().getMonth()+Number(st.officer_term_months))))); }; rsel.onchange=syncRole; syncRole(); }
   on("pinf", async d=>{ const {data,error}=await sb.functions.invoke("reset-pin",{body:{username:d.username,new_pin:d.new_pin}}); if(error){ let msg=error.message; try{ const r=await error.context?.json(); if(r?.error) msg=r.error; }catch{} throw new Error(msg); } if(data?.error) throw new Error(data.error); toast(t("done")); });
   on("invf", async d=>{ const {error}=await sb.from("investments").insert({name:d.name,type:d.type,institution:d.institution||null,amount_invested:Number(d.amount_invested),invested_on:d.invested_on||null,expected_annual_return_pct:d.expected_annual_return_pct?Number(d.expected_annual_return_pct):null,status:d.status,managed_by:S.me.id}); if(error) throw error; toast(t("saved")); render(); });
   on("cpf", async d=>{ if(!/^\d{6}$/.test(d.pin)) throw new Error(t("pinformat")); const {error}=await sb.auth.updateUser({password:d.pin}); if(error) throw error; toast(t("saved")); });
